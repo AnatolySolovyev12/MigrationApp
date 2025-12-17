@@ -8,17 +8,19 @@ void getTablesArray();
 QString getDataBaseName(QString paramString);
 
 
-
 QList<QString>stringTablesArray;
 QSqlDatabase mainDb;
+QString nameDb;
 
 int main(int argc, char* argv[])
 {
 	QCoreApplication app(argc, argv);
 
 	connectDataBase();
-	
 
+	getTablesArray();
+
+	qDebug() << stringTablesArray;
 
 	return app.exec();
 }
@@ -39,7 +41,7 @@ void connectDataBase()
 	mainDb.setDatabaseName(
 		"DRIVER={SQL Server};"
 		"Server=127.0.0.1,1433;"
-		"Database=testdb;"
+		"Database=EnergyRes;"
 		"Uid=solovev;"
 		"Pwd=art54011212;"
 	); //"DataBase is CONNECT to DRIVER={SQL Server};Server=127.0.0.1,1433;Database=testdb;Uid=solovev;Pwd=art54011212;"
@@ -60,33 +62,33 @@ void connectDataBase()
 	}
 	else
 	{
-		qDebug() << "DataBase is CONNECT to " + getDataBaseName(mainDb.databaseName());
+		nameDb = getDataBaseName(mainDb.databaseName());
+		qDebug() << "DataBase is CONNECT to " + nameDb << '\n';
 	}
 }
 
 void getTablesArray()
 {
-	QSqlQuery tablesQuery;
-
-	QString dbNameFromConnect = mainDb.databaseName();
+	QSqlQuery tablesQuery(mainDb);
 
 	tablesQuery.prepare(R"(
-SELECT TABLE_CATALOG
-FROM :dbNameFromConnect.INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE'
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :dbNameFromConnect
         )");
 
-	tablesQuery.bindValue(":dbNameFromConnect", dbNameFromConnect);
+	tablesQuery.bindValue(":dbNameFromConnect", nameDb);
+	//tablesQuery.addBindValue(nameDb); Альтернатива. Будет добавлен вместо ? в запросе
 
 	if (!tablesQuery.exec() || !tablesQuery.next())
 	{
 		tablesQuery.lastError().text();
 	}
 	else
-	{
+	{	
 		do {
 			stringTablesArray.push_back(tablesQuery.value(0).toString());
-		} while (tablesQuery.next());
+		} while (tablesQuery.next());	
 	}
 }
 
