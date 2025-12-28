@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 	
 	connectDataBase(masterDb, 1);
 
-	createNewDbFromOther(nameDb);
+	createNewDbFromOther(getDataBaseName(mainDb.databaseName()));
 
 	//qDebug() << stringTablesArray;
 
@@ -130,15 +130,12 @@ void createNewDbFromOther(QString tempName)
 	QSqlQuery createBase(masterDb);
 
 	QString tempStringForName = tempName + "_doppelganger";
-	createBase.prepare(R"(
-CREATE DATABASE IF NOT EXIST :dbName
-        )");
 
-	createBase.bindValue(":dbName", tempStringForName);
+	QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(tempStringForName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
 
-	if (!createBase.exec())
+	if (!createBase.exec(createDataBaseStringQuery))
 	{
-		qDebug() << tempStringForName + "wasnt create because:" << "\n";
+		qDebug() << tempStringForName + " wasnt create because:" << "\n";
 		qDebug() << createBase.lastError().text();
 		qDebug() << createBase.lastError().databaseText();
 		qDebug() << createBase.lastError().driverText();
