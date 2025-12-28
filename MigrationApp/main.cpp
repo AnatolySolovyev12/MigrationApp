@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 	
 	connectDataBase(masterDb, 1);
 
-	//createNewDbFromOther(nameDb);
+	createNewDbFromOther(nameDb);
 
 	//qDebug() << stringTablesArray;
 
@@ -127,7 +127,7 @@ QString getDataBaseName(QString paramString)
 
 void createNewDbFromOther(QString tempName)
 {
-	QSqlQuery createBase(mainDb);
+	QSqlQuery createBase(masterDb);
 
 	QString tempStringForName = tempName + "_doppelganger";
 	createBase.prepare(R"(
@@ -138,7 +138,7 @@ CREATE DATABASE IF NOT EXIST :dbName
 
 	if (!createBase.exec())
 	{
-		qDebug() << tempStringForName + "wasnt create because:\n";
+		qDebug() << tempStringForName + "wasnt create because:" << "\n";
 		qDebug() << createBase.lastError().text();
 		qDebug() << createBase.lastError().databaseText();
 		qDebug() << createBase.lastError().driverText();
