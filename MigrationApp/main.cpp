@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
 	connectDataBase(mainDb, 0);
 
 	//getTablesArray();
-	
+
 	connectDataBase(masterDb, 1);
 
 	createNewDbFromOther(getDataBaseName(mainDb.databaseName()));
@@ -50,7 +50,7 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 		*/
 
 		//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
-        //mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
+		//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
 
 		tempDbConnection = QSqlDatabase::addDatabase("QODBC", "mainDbConn"); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы не сработают. 
 		tempDbConnection.setDatabaseName(
@@ -82,8 +82,8 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 	}
 	else
 	{
-		nameDb = masterBool == true ? "master with Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
-		qDebug() << "DataBase is CONNECT to " + nameDb + " with connection name = " + tempDbConnection.connectionName()<< '\n';
+		nameDb = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
+		qDebug() << "DataBase is CONNECT to " + nameDb + " with connection name = " + tempDbConnection.connectionName() << '\n';
 	}
 }
 
@@ -120,7 +120,6 @@ QString getDataBaseName(QString paramString)
 {
 	QString temp = paramString.sliced(paramString.indexOf("Database=")).sliced(9);
 	temp = temp.left(temp.indexOf(';'));
-
 	return temp;
 }
 
@@ -131,18 +130,42 @@ void createNewDbFromOther(QString tempName)
 
 	QString tempStringForName = tempName + "_doppelganger";
 
-	QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(tempStringForName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
+	createBase.prepare(R"(
+SELECT name
+  FROM [msdb].[sys].[databases]
+WHERE name = :tableNameCheck
+        )");
 
-	if (!createBase.exec(createDataBaseStringQuery))
+	createBase.bindValue(":tableNameCheck", tempStringForName);
+
+	if (!createBase.exec() || !createBase.next())
 	{
-		qDebug() << tempStringForName + " wasnt create because:" << "\n";
-		qDebug() << createBase.lastError().text();
-		qDebug() << createBase.lastError().databaseText();
-		qDebug() << createBase.lastError().driverText();
+		if (createBase.lastError().isValid())
+		{
+			qDebug() << "Error: " << createBase.lastError().text();
+			return;
+		}
+
+		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(tempStringForName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
+
+		if (!createBase.exec(createDataBaseStringQuery))
+		{
+			qDebug() << tempStringForName + " wasnt create because:" << "\n";
+			qDebug() << createBase.lastError().text();
+			qDebug() << createBase.lastError().databaseText();
+			qDebug() << createBase.lastError().driverText();
+		}
+		else
+		{
+			qDebug() << tempStringForName + " was create";
+		}
 	}
 	else
 	{
-		qDebug() << tempStringForName + " was create.";
+		if (createBase.isValid())
+		{
+			qDebug() << "DataBase with this name exists. Try use other name or check this DataBase";
+			return;
+		}
 	}
-
 }
