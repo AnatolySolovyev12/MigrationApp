@@ -2,6 +2,7 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <qsqlquery>
+#include <iostream>
 
 void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
 void getTablesArray();
@@ -108,12 +109,12 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 	{
 		if (tempDbConnection.lastError().isValid())
 		{
-			qDebug() << tempDbConnection.lastError().text();
-			qDebug() << tempDbConnection.lastError().driverText();
-			qDebug() << tempDbConnection.lastError().databaseText();
+			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().text();
+			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().driverText();
+			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().databaseText();
 		}
 		else
-			qDebug() << "Unknow error happened in connectDataBase()";
+			qDebug() << "Error in connectDataBase. Unknow error happened in connectDataBase()";
 	}
 	else
 	{
@@ -139,7 +140,7 @@ WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :db
 
 	if (!tablesQuery.exec() || !tablesQuery.next())
 	{
-		tablesQuery.lastError().text();
+		qDebug() << "Error in getTablesArray: " << tablesQuery.lastError().text();
 	}
 	else
 	{
@@ -177,7 +178,7 @@ WHERE name = :tableNameCheck
 	{
 		if (createBase.lastError().isValid())
 		{
-			qDebug() << "Error: " << createBase.lastError().text();
+			qDebug() << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text();
 			return;
 		}
 
@@ -185,7 +186,7 @@ WHERE name = :tableNameCheck
 
 		if (!createBase.exec(createDataBaseStringQuery))
 		{
-			qDebug() << tempStringForName + " wasnt create because:" << "\n";
+			qDebug() << "Error in createNewDbFromOther when create new DB: " << tempStringForName + " wasnt create because:" << "\n";
 			qDebug() << createBase.lastError().text();
 			qDebug() << createBase.lastError().databaseText();
 			qDebug() << createBase.lastError().driverText();
@@ -204,10 +205,11 @@ WHERE name = :tableNameCheck
 		}
 	}
 
-	readTableFuncFromDonorBase(tempStringForName, stringTablesArray[0]);
+	for (auto& nameTableFromCycle : stringTablesArray)
+	{
+		readTableFuncFromDonorBase(tempStringForName, nameTableFromCycle);
+	}
 }
-
-
 
 void readTableFuncFromDonorBase(QString baseName, QString tableNameTemp)
 {
@@ -226,7 +228,7 @@ SELECT *
 	{
 		if (createTableAndColumn.lastError().isValid())
 		{
-			qDebug() << "Error: " << createTableAndColumn.lastError().text();
+			qDebug() << "Error in readTableFuncFromDonorBase when check column for tables of new DB: " << createTableAndColumn.lastError().text();
 			return;
 		}
 	}
@@ -265,6 +267,31 @@ SELECT *
 
 		QSqlQuery createTableAndColumnInNewDb(masterDb);
 
+
+		QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = %2")
+			.arg(baseName)
+			.arg(tableNameTemp);
+
+		if (!createTableAndColumnInNewDb.exec() || !createTableAndColumnInNewDb.next())
+		{
+			if (createTableAndColumnInNewDb.lastError().isValid())
+			{
+				qDebug() << "Error in readTableFuncFromDonorBase when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text();
+				structArrayForTable.clear();
+				return;
+			}
+		}
+		else
+		{
+			if (createTableAndColumnInNewDb.isValid())
+			{
+				qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
+				structArrayForTable.clear();
+				return;
+			}
+		}
+
+
 		QString queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
 			.arg(baseName)
 			.arg(tableNameTemp)
@@ -272,18 +299,15 @@ SELECT *
 			.arg(structArrayForTable[0].dataType)
 			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
 
-	
-
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
-				qDebug() << "Error: " << createTableAndColumnInNewDb.lastError().text();
+				qDebug() << "Error in readTableFuncFromDonorBase when try create new table(" << tableNameTemp << "): " << createTableAndColumnInNewDb.lastError().text();
+				structArrayForTable.clear();
 				return;
 			}
 		}
-
-		qDebug() << "structArrayForTable.length() = " << structArrayForTable.length();
 
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
 		{
@@ -294,21 +318,20 @@ SELECT *
 				.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
 				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
 
-			if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
-				qDebug() << createTableAndColumnInNewDb.lastQuery();/////////////////////////////////////////////////////////////////////
+				//qDebug() << createTableAndColumnInNewDb.lastQuery();/////////////////////////////////////////////////////////////////////
 
 				if (createTableAndColumnInNewDb.lastError().isValid())
 				{
-					qDebug() << "Error: " << createTableAndColumnInNewDb.lastError().text();
+					qDebug() << "Error in readTableFuncFromDonorBase when try add new column: " << createTableAndColumnInNewDb.lastError().text();
+					structArrayForTable.clear();
 					return;
 				}
 			}
-			else
-			{
-				qDebug() << "DONE?";
-
-			}
 		}
 	}
+
+	qDebug() << "Add table " << tableNameTemp;
+	structArrayForTable.clear();
 }
