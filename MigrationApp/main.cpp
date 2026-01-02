@@ -8,7 +8,7 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
 void getTablesArray();
 QString getDataBaseName(QString paramString);
 void createNewDbFromOther(QString tempName);
-void readTableFuncFromDonorBase(QString baseName, QString tableNameTemp);
+void readAndCreateNewTablesInNewDb(QString baseName, QString tableNameTemp);
 
 
 QList<QString>stringTablesArray;
@@ -201,18 +201,20 @@ WHERE name = :tableNameCheck
 		if (createBase.isValid())
 		{
 			qDebug() << "DataBase with this name exists. Try use other name or check this DataBase\n";
-			//return;
+			return;
 		}
 	}
 
 	for (auto& nameTableFromCycle : stringTablesArray)
 	{
-		readTableFuncFromDonorBase(tempStringForName, nameTableFromCycle);
+		readAndCreateNewTablesInNewDb(tempStringForName, nameTableFromCycle);
 	}
 }
 
-void readTableFuncFromDonorBase(QString baseName, QString tableNameTemp)
+void readAndCreateNewTablesInNewDb(QString baseName, QString tableNameTemp)
 {
+	// Формируем список столбцов для создаваемой таблице
+
 	QSqlQuery createTableAndColumn(mainDb);
 
 	createTableAndColumn.prepare(R"(
@@ -265,14 +267,15 @@ SELECT *
 
 		} while (createTableAndColumn.next());
 
+		// Проверяем наличие дубликатов таблиц в новой БД
+
 		QSqlQuery createTableAndColumnInNewDb(masterDb);
 
-
-		QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = %2")
+		QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
 			.arg(baseName)
 			.arg(tableNameTemp);
 
-		if (!createTableAndColumnInNewDb.exec() || !createTableAndColumnInNewDb.next())
+		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
@@ -291,8 +294,9 @@ SELECT *
 			}
 		}
 
+		// Создаём новую таблицу в новой БД
 
-		QString queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
+		 queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
 			.arg(baseName)
 			.arg(tableNameTemp)
 			.arg(structArrayForTable[0].ColumnName)
@@ -309,6 +313,8 @@ SELECT *
 			}
 		}
 
+		// Добавляем оставшиеся столбцы в созданную таблицу
+
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
 		{
 			 queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
@@ -320,8 +326,6 @@ SELECT *
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
-				//qDebug() << createTableAndColumnInNewDb.lastQuery();/////////////////////////////////////////////////////////////////////
-
 				if (createTableAndColumnInNewDb.lastError().isValid())
 				{
 					qDebug() << "Error in readTableFuncFromDonorBase when try add new column: " << createTableAndColumnInNewDb.lastError().text();
