@@ -7,13 +7,47 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
 void getTablesArray();
 QString getDataBaseName(QString paramString);
 void createNewDbFromOther(QString tempName);
+void readTableFuncFromDonorBase(QString baseName, QString tableNameTemp);
 
 
 QList<QString>stringTablesArray;
+
+
+
 QSqlDatabase mainDb;
 QSqlDatabase masterDb;
 QSqlDatabase doppelDb;
 QString nameDb;
+
+
+struct TableColumnStruct
+{
+	QString tableCatalog = "";
+	QString tableSchema = "";
+	QString tableName = "";
+	QString ColumnName = "";
+	int ordinalPosition;
+	QString columnDefault = "";
+	QString isNullable = "";
+	QString dataType = "";
+	int characterMaximumLength;
+	int characterOctetLength;
+	int numericPrecision;
+	int numericPrecisionRadix;
+	int numericScale;
+	int dateTimePrecision;
+	QString characterSetCatalog = "";
+	QString characterSetSchema = "";
+	QString characterSetName = "";
+	QString collationCatalog = "";
+	QString collatiionSchema = "";
+	QString collationName = "";
+	QString domainCatalog = "";
+	QString domainSchena = "";
+	QString domainName = "";
+};
+
+QList<TableColumnStruct>structArrayForTable;
 
 int main(int argc, char* argv[])
 {
@@ -23,13 +57,14 @@ int main(int argc, char* argv[])
 
 	connectDataBase(mainDb, 0);
 
-	//getTablesArray();
+	getTablesArray();
 
 	connectDataBase(masterDb, 1);
 
 	createNewDbFromOther(getDataBaseName(mainDb.databaseName()));
 
 	//qDebug() << stringTablesArray;
+	//qDebug() << structArrayForTable[0].tableCatalog;
 
 	return app.exec();
 }
@@ -157,15 +192,123 @@ WHERE name = :tableNameCheck
 		}
 		else
 		{
-			qDebug() << tempStringForName + " was create";
+			qDebug() << tempStringForName + " was create" << "\n";
 		}
 	}
 	else
 	{
 		if (createBase.isValid())
 		{
-			qDebug() << "DataBase with this name exists. Try use other name or check this DataBase";
+			qDebug() << "DataBase with this name exists. Try use other name or check this DataBase\n";
+			//return;
+		}
+	}
+
+	readTableFuncFromDonorBase(tempStringForName, stringTablesArray[0]);
+}
+
+
+
+void readTableFuncFromDonorBase(QString baseName, QString tableNameTemp)
+{
+	QSqlQuery createTableAndColumn(mainDb);
+
+	createTableAndColumn.prepare(R"(
+SELECT *
+  FROM INFORMATION_SCHEMA.COLUMNS
+  where TABLE_NAME = :tempTableName
+  order by ORDINAL_POSITION
+        )");
+
+	createTableAndColumn.bindValue(":tempTableName", tableNameTemp);
+
+	if (!createTableAndColumn.exec() || !createTableAndColumn.next())
+	{
+		if (createTableAndColumn.lastError().isValid())
+		{
+			qDebug() << "Error: " << createTableAndColumn.lastError().text();
 			return;
+		}
+	}
+	else
+	{
+		do {
+			TableColumnStruct tempStruct;
+
+			tempStruct.tableCatalog = createTableAndColumn.value(0).toString();
+			tempStruct.tableSchema = createTableAndColumn.value(1).toString();
+			tempStruct.tableName = createTableAndColumn.value(2).toString();
+			tempStruct.ColumnName = createTableAndColumn.value(3).toString();
+			tempStruct.ordinalPosition = createTableAndColumn.value(4).toInt();
+			tempStruct.columnDefault = createTableAndColumn.value(5).toString();
+			tempStruct.isNullable = createTableAndColumn.value(6).toString();
+			tempStruct.dataType = createTableAndColumn.value(7).toString();
+			tempStruct.characterMaximumLength = createTableAndColumn.value(8).toInt();
+			tempStruct.characterOctetLength = createTableAndColumn.value(9).toInt();
+			tempStruct.numericPrecision = createTableAndColumn.value(10).toInt();
+			tempStruct.numericPrecisionRadix = createTableAndColumn.value(11).toInt();
+			tempStruct.numericScale = createTableAndColumn.value(12).toInt();
+			tempStruct.dateTimePrecision = createTableAndColumn.value(13).toInt();
+			tempStruct.characterSetCatalog = createTableAndColumn.value(14).toString();
+			tempStruct.characterSetSchema = createTableAndColumn.value(15).toString();
+			tempStruct.characterSetName = createTableAndColumn.value(16).toString();
+			tempStruct.collationCatalog = createTableAndColumn.value(17).toString();
+			tempStruct.collatiionSchema = createTableAndColumn.value(18).toString();
+			tempStruct.collationName = createTableAndColumn.value(19).toString();
+			tempStruct.domainCatalog = createTableAndColumn.value(20).toString();
+			tempStruct.domainSchena = createTableAndColumn.value(21).toString();
+			tempStruct.domainName = createTableAndColumn.value(22).toString();
+
+			structArrayForTable.push_back(tempStruct);
+
+		} while (createTableAndColumn.next());
+
+		QSqlQuery createTableAndColumnInNewDb(masterDb);
+
+		QString queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
+			.arg(baseName)
+			.arg(tableNameTemp)
+			.arg(structArrayForTable[0].ColumnName)
+			.arg(structArrayForTable[0].dataType)
+			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
+
+	
+
+		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+		{
+			if (createTableAndColumnInNewDb.lastError().isValid())
+			{
+				qDebug() << "Error: " << createTableAndColumnInNewDb.lastError().text();
+				return;
+			}
+		}
+
+		qDebug() << "structArrayForTable.length() = " << structArrayForTable.length();
+
+		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
+		{
+			 queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
+				.arg(baseName)
+				.arg(tableNameTemp)
+				.arg(structArrayForTable[counterColumn].ColumnName)
+				.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
+				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
+
+			if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+			{
+				qDebug() << createTableAndColumnInNewDb.lastQuery();/////////////////////////////////////////////////////////////////////
+
+				if (createTableAndColumnInNewDb.lastError().isValid())
+				{
+					qDebug() << "Error: " << createTableAndColumnInNewDb.lastError().text();
+					return;
+				}
+			}
+			else
+			{
+				qDebug() << "DONE?";
+
+			}
 		}
 	}
 }
