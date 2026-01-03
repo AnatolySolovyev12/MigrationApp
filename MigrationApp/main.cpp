@@ -4,22 +4,24 @@
 #include <qsqlquery>
 #include <iostream>
 
-void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
-void getTablesArray();
+
+
+bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
+bool getTablesArray();
 QString getDataBaseName(QString paramString);
-void createNewDbFromOther(QString tempName);
-void readAndCreateNewTablesInNewDb(QString baseName, QString tableNameTemp);
+void createDoppelDbFromMain(QString tempName);
+void readTablesInMainDb(QString baseName, QString tableNameTemp);
+void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
+
 
 
 QList<QString>stringTablesArray;
 
-
-
 QSqlDatabase mainDb;
 QSqlDatabase masterDb;
 QSqlDatabase doppelDb;
-QString nameDb;
 
+QString nameDb;
 
 struct TableColumnStruct
 {
@@ -50,30 +52,42 @@ struct TableColumnStruct
 
 QList<TableColumnStruct>structArrayForTable;
 
+
+
 int main(int argc, char* argv[])
 {
+	setlocale(LC_ALL, "russian");
+
 	qDebug() << "All drivers for connection: " << QSqlDatabase::drivers() << "\n";
 
 	QCoreApplication app(argc, argv);
 
-	connectDataBase(mainDb, 0);
-
-	getTablesArray();
-
-	connectDataBase(masterDb, 1);
-
-	createNewDbFromOther(getDataBaseName(mainDb.databaseName()));
-
-	//qDebug() << stringTablesArray;
-	//qDebug() << structArrayForTable[0].tableCatalog;
+	if (connectDataBase(mainDb, 0))
+	{
+		if (getTablesArray())
+		{
+			if (connectDataBase(masterDb, 1))
+				createDoppelDbFromMain(getDataBaseName(mainDb.databaseName()));
+			else
+				qDebug() << "Check your setting for connect to master DataBase and try again";
+		}
+		else
+			qDebug() << "Fail when trying to get all tables from mainDb";	
+	}
+	else
+	{
+		qDebug() << "Check your setting for connect to main DataBase and try again";
+	}
 
 	return app.exec();
 }
 
 
 
-void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
+bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 {
+	// Производим подключение к целевой БД
+
 	if (!masterBool)
 	{
 		/*
@@ -109,24 +123,32 @@ void connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 	{
 		if (tempDbConnection.lastError().isValid())
 		{
-			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().text();
-			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().driverText();
-			qDebug() << "Error in connectDataBase: " << tempDbConnection.lastError().databaseText();
+			std::cout << "Error in connectDataBase: " << tempDbConnection.lastError().text().toStdString() << std::endl;
+			std::cout << "Error in connectDataBase: " << tempDbConnection.lastError().driverText().toStdString() << std::endl;
+			std::cout << "Error in connectDataBase: " << tempDbConnection.lastError().databaseText().toStdString() << std::endl;
+
+			return false;
 		}
 		else
+		{
 			qDebug() << "Error in connectDataBase. Unknow error happened in connectDataBase()";
+			return false;
+		}
 	}
 	else
 	{
 		nameDb = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
 		qDebug() << "DataBase is CONNECT to " + nameDb + " with connection name = " + tempDbConnection.connectionName() << '\n';
+		return true;
 	}
 }
 
 
 
-void getTablesArray()
+bool getTablesArray()
 {
+	// Получаем список всех таблиц в донорской БД
+
 	QSqlQuery tablesQuery(mainDb);
 
 	tablesQuery.prepare(R"(
@@ -140,13 +162,16 @@ WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :db
 
 	if (!tablesQuery.exec() || !tablesQuery.next())
 	{
-		qDebug() << "Error in getTablesArray: " << tablesQuery.lastError().text();
+		std::cout << "Error in getTablesArray: " << tablesQuery.lastError().text().toStdString() << std::endl;
+		return false;
 	}
 	else
 	{
 		do {
 			stringTablesArray.push_back(tablesQuery.value(0).toString());
 		} while (tablesQuery.next());
+
+		return true;
 	}
 }
 
@@ -154,14 +179,19 @@ WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :db
 
 QString getDataBaseName(QString paramString)
 {
+	// Получаем чисто имя базы данных
+
 	QString temp = paramString.sliced(paramString.indexOf("Database=")).sliced(9);
 	temp = temp.left(temp.indexOf(';'));
 	return temp;
 }
 
 
-void createNewDbFromOther(QString tempName)
+
+void createDoppelDbFromMain(QString tempName)
 {
+	// Создаём новую БД с изменённым именем
+
 	QSqlQuery createBase(masterDb);
 
 	QString tempStringForName = tempName + "_doppelganger";
@@ -178,7 +208,7 @@ WHERE name = :tableNameCheck
 	{
 		if (createBase.lastError().isValid())
 		{
-			qDebug() << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text();
+			std::cout << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text().toStdString() << std::endl;
 			return;
 		}
 
@@ -187,9 +217,9 @@ WHERE name = :tableNameCheck
 		if (!createBase.exec(createDataBaseStringQuery))
 		{
 			qDebug() << "Error in createNewDbFromOther when create new DB: " << tempStringForName + " wasnt create because:" << "\n";
-			qDebug() << createBase.lastError().text();
-			qDebug() << createBase.lastError().databaseText();
-			qDebug() << createBase.lastError().driverText();
+			std::cout << createBase.lastError().text().toStdString() << std::endl;
+			std::cout << createBase.lastError().databaseText().toStdString() << std::endl;
+			std::cout << createBase.lastError().driverText().toStdString() << std::endl;
 		}
 		else
 		{
@@ -207,11 +237,13 @@ WHERE name = :tableNameCheck
 
 	for (auto& nameTableFromCycle : stringTablesArray)
 	{
-		readAndCreateNewTablesInNewDb(tempStringForName, nameTableFromCycle);
+		readTablesInMainDb(tempStringForName, nameTableFromCycle);
 	}
 }
 
-void readAndCreateNewTablesInNewDb(QString baseName, QString tableNameTemp)
+
+
+void readTablesInMainDb(QString baseName, QString tableNameTemp)
 {
 	// Формируем список столбцов для создаваемой таблице
 
@@ -230,7 +262,7 @@ SELECT *
 	{
 		if (createTableAndColumn.lastError().isValid())
 		{
-			qDebug() << "Error in readTableFuncFromDonorBase when check column for tables of new DB: " << createTableAndColumn.lastError().text();
+			std::cout << "Error in readTableFuncFromDonorBase when check column for tables of new DB: " << createTableAndColumn.lastError().text().toStdString() << std::endl;
 			return;
 		}
 	}
@@ -267,75 +299,82 @@ SELECT *
 
 		} while (createTableAndColumn.next());
 
-		// Проверяем наличие дубликатов таблиц в новой БД
-
-		QSqlQuery createTableAndColumnInNewDb(masterDb);
-
-		QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
-			.arg(baseName)
-			.arg(tableNameTemp);
-
-		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
-		{
-			if (createTableAndColumnInNewDb.lastError().isValid())
-			{
-				qDebug() << "Error in readTableFuncFromDonorBase when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text();
-				structArrayForTable.clear();
-				return;
-			}
-		}
-		else
-		{
-			if (createTableAndColumnInNewDb.isValid())
-			{
-				qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
-				structArrayForTable.clear();
-				return;
-			}
-		}
-
-		// Создаём новую таблицу в новой БД
-
-		 queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
-			.arg(baseName)
-			.arg(tableNameTemp)
-			.arg(structArrayForTable[0].ColumnName)
-			.arg(structArrayForTable[0].dataType)
-			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
-
-		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
-		{
-			if (createTableAndColumnInNewDb.lastError().isValid())
-			{
-				qDebug() << "Error in readTableFuncFromDonorBase when try create new table(" << tableNameTemp << "): " << createTableAndColumnInNewDb.lastError().text();
-				structArrayForTable.clear();
-				return;
-			}
-		}
-
-		// Добавляем оставшиеся столбцы в созданную таблицу
-
-		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
-		{
-			 queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
-				.arg(baseName)
-				.arg(tableNameTemp)
-				.arg(structArrayForTable[counterColumn].ColumnName)
-				.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
-				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
-
-			if (!createTableAndColumnInNewDb.exec(queryString))
-			{
-				if (createTableAndColumnInNewDb.lastError().isValid())
-				{
-					qDebug() << "Error in readTableFuncFromDonorBase when try add new column: " << createTableAndColumnInNewDb.lastError().text();
-					structArrayForTable.clear();
-					return;
-				}
-			}
-		}
+		createTablesInDoppelDb(baseName, tableNameTemp);
 	}
 
 	qDebug() << "Add table " << tableNameTemp;
 	structArrayForTable.clear();
+}
+
+
+
+void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
+{
+	// Проверяем наличие дубликатов таблиц в новой БД
+
+	QSqlQuery createTableAndColumnInNewDb(masterDb);
+
+	QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
+		.arg(baseName)
+		.arg(tableNameTemp);
+
+	if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+	{
+		if (createTableAndColumnInNewDb.lastError().isValid())
+		{
+			std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+			structArrayForTable.clear();
+			return;
+		}
+	}
+	else
+	{
+		if (createTableAndColumnInNewDb.isValid())
+		{
+			qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
+			structArrayForTable.clear();
+			return;
+		}
+	}
+
+	// Создаём новую таблицу в новой БД
+
+	queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
+		.arg(baseName)
+		.arg(tableNameTemp)
+		.arg(structArrayForTable[0].ColumnName)
+		.arg(structArrayForTable[0].dataType)
+		.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
+
+	if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+	{
+		if (createTableAndColumnInNewDb.lastError().isValid())
+		{
+			std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+			structArrayForTable.clear();
+			return;
+		}
+	}
+
+	// Добавляем оставшиеся столбцы в созданную таблицу
+
+	for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
+	{
+		queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
+			.arg(baseName)
+			.arg(tableNameTemp)
+			.arg(structArrayForTable[counterColumn].ColumnName)
+			.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
+			.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
+
+		if (!createTableAndColumnInNewDb.exec(queryString))
+		{
+			if (createTableAndColumnInNewDb.lastError().isValid())
+			{
+				std::cout << "Error in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				structArrayForTable.clear();
+				return;
+			}
+		}
+	}
 }
