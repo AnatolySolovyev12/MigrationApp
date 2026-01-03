@@ -12,6 +12,7 @@ QString getDataBaseName(QString paramString);
 void createDoppelDbFromMain(QString tempName);
 void readTablesInMainDb(QString baseName, QString tableNameTemp);
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
+void dropDataBase(QString baseName);
 
 
 
@@ -22,6 +23,9 @@ QSqlDatabase masterDb;
 QSqlDatabase doppelDb;
 
 QString nameDb;
+QString doppelDbName;
+int counterForPercent = 1;
+bool checkDuplicateTableBool = false;
 
 struct TableColumnStruct
 {
@@ -62,6 +66,8 @@ int main(int argc, char* argv[])
 
 	QCoreApplication app(argc, argv);
 
+	checkDuplicateTableBool = true; /////////////////////////
+
 	if (connectDataBase(mainDb, 0))
 	{
 		if (getTablesArray())
@@ -72,12 +78,14 @@ int main(int argc, char* argv[])
 				qDebug() << "Check your setting for connect to master DataBase and try again";
 		}
 		else
-			qDebug() << "Fail when trying to get all tables from mainDb";	
+			qDebug() << "Fail when trying to get all tables from mainDb";
 	}
 	else
 	{
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
+
+	dropDataBase(doppelDbName); ///////////////////
 
 	return app.exec();
 }
@@ -194,7 +202,7 @@ void createDoppelDbFromMain(QString tempName)
 
 	QSqlQuery createBase(masterDb);
 
-	QString tempStringForName = tempName + "_doppelganger";
+	doppelDbName = tempName + "_doppelganger";
 
 	createBase.prepare(R"(
 SELECT name
@@ -202,7 +210,7 @@ SELECT name
 WHERE name = :tableNameCheck
         )");
 
-	createBase.bindValue(":tableNameCheck", tempStringForName);
+	createBase.bindValue(":tableNameCheck", doppelDbName);
 
 	if (!createBase.exec() || !createBase.next())
 	{
@@ -212,18 +220,18 @@ WHERE name = :tableNameCheck
 			return;
 		}
 
-		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(tempStringForName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
+		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(doppelDbName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
 
 		if (!createBase.exec(createDataBaseStringQuery))
 		{
-			qDebug() << "Error in createNewDbFromOther when create new DB: " << tempStringForName + " wasnt create because:" << "\n";
+			qDebug() << "Error in createNewDbFromOther when create new DB: " << doppelDbName + " wasnt create because:" << "\n";
 			std::cout << createBase.lastError().text().toStdString() << std::endl;
 			std::cout << createBase.lastError().databaseText().toStdString() << std::endl;
 			std::cout << createBase.lastError().driverText().toStdString() << std::endl;
 		}
 		else
 		{
-			qDebug() << tempStringForName + " was create" << "\n";
+			qDebug() << doppelDbName + " was create" << "\n";
 		}
 	}
 	else
@@ -237,8 +245,11 @@ WHERE name = :tableNameCheck
 
 	for (auto& nameTableFromCycle : stringTablesArray)
 	{
-		readTablesInMainDb(tempStringForName, nameTableFromCycle);
+		readTablesInMainDb(doppelDbName, nameTableFromCycle);
 	}
+
+	qDebug() << "\n";
+	counterForPercent = 0;
 }
 
 
@@ -302,7 +313,17 @@ SELECT *
 		createTablesInDoppelDb(baseName, tableNameTemp);
 	}
 
-	qDebug() << "Add table " << tableNameTemp;
+	// высчитываем процент выполнения создания новых таблиц в новой БД
+
+	double percentDouble = static_cast<double>(counterForPercent) / stringTablesArray.length() * 100.0;
+	int percent = static_cast<int>(std::min(percentDouble, 100.0));
+
+	std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add table " + tableNameTemp.toStdString();
+
+	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
+
+	counterForPercent++;
+
 	structArrayForTable.clear();
 }
 
@@ -313,27 +334,31 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 	// Проверяем наличие дубликатов таблиц в новой БД
 
 	QSqlQuery createTableAndColumnInNewDb(masterDb);
+	QString queryString;
 
-	QString queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
-		.arg(baseName)
-		.arg(tableNameTemp);
-
-	if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+	if (checkDuplicateTableBool)
 	{
-		if (createTableAndColumnInNewDb.lastError().isValid())
+		queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
+			.arg(baseName)
+			.arg(tableNameTemp);
+
+		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
-			std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
-			structArrayForTable.clear();
-			return;
+			if (createTableAndColumnInNewDb.lastError().isValid())
+			{
+				std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				structArrayForTable.clear();
+				return;
+			}
 		}
-	}
-	else
-	{
-		if (createTableAndColumnInNewDb.isValid())
+		else
 		{
-			qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
-			structArrayForTable.clear();
-			return;
+			if (createTableAndColumnInNewDb.isValid())
+			{
+				qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
+				structArrayForTable.clear();
+				return;
+			}
 		}
 	}
 
@@ -377,4 +402,23 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			}
 		}
 	}
+}
+
+
+
+void dropDataBase(QString baseName)
+{
+	if (baseName == "")
+	{
+		qDebug() << "baseName is void. Try again and check your params";
+		return;
+	}
+
+	QSqlQuery dropDataBaseQuery(masterDb);
+	QString queryString = QString("DROP DATABASE %1").arg(baseName);
+
+	if (!dropDataBaseQuery.exec(queryString))
+		std::cout << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+	else
+		qDebug() << baseName + " was deleted";
 }
