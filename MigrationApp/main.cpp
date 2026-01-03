@@ -112,7 +112,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 
 		tempDbConnection = QSqlDatabase::addDatabase("QODBC", "mainDbConn"); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы не сработают. 
 		tempDbConnection.setDatabaseName(
-			"DRIVER={SQL Server};"
+			"DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
 			"Server=127.0.0.1,1433;"
 			"Database=EnergyRes;"
 			"Uid=solovev;"
@@ -121,9 +121,9 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 	}
 	else
 	{
-		QString connStr = "DRIVER={ODBC Driver 17 for SQL Server};"
-			"Server=127.0.0.1,1433;DATABASE=master;Trusted_Connection=yes;"; // Windows Authentication
 		tempDbConnection = QSqlDatabase::addDatabase("QODBC", "masterConn");
+		QString connStr = "DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
+			"Server=127.0.0.1,1433;DATABASE=master;Trusted_Connection=yes;"; // Windows Authentication
 		tempDbConnection.setDatabaseName(connStr);
 	}
 
