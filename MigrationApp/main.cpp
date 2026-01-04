@@ -6,13 +6,14 @@
 
 
 
-bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool);
+bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool);
 bool getTablesArray();
 QString getDataBaseName(QString paramString);
 void createDoppelDbFromMain(QString tempName);
 void readTablesInMainDb(QString baseName, QString tableNameTemp);
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
 void dropDataBase(QString baseName);
+void createView(QString baseName);
 
 
 
@@ -22,8 +23,10 @@ QSqlDatabase mainDb;
 QSqlDatabase masterDb;
 QSqlDatabase doppelDb;
 
-QString nameDb;
+QString mainDbName;
+QString masterDbName;
 QString doppelDbName;
+
 int counterForPercent = 1;
 bool checkDuplicateTableBool = false;
 bool createFromCopy = false;
@@ -68,14 +71,14 @@ int main(int argc, char* argv[])
 
 	QCoreApplication app(argc, argv);
 
-	checkDuplicateTableBool = true; /////////////////////////
+	//checkDuplicateTableBool = true; /////////////////////////
 	//createFromCopy = true; /////////////////////////////
 
-	if (connectDataBase(mainDb, 0))
+	if (connectDataBase(mainDb, 0, 0))
 	{
 		if (getTablesArray())
 		{
-			if (connectDataBase(masterDb, 1))
+			if (connectDataBase(masterDb, 1, 0))
 				createDoppelDbFromMain(getDataBaseName(mainDb.databaseName()));
 			else
 				qDebug() << "Check your setting for connect to master DataBase and try again";
@@ -88,14 +91,20 @@ int main(int argc, char* argv[])
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
 
-	//dropDataBase(doppelDbName); ///////////////////
+	if (connectDataBase(doppelDb, 0, 1))
+		createView(mainDbName);
+	else
+		qDebug() << "Check your setting for connect to master DataBase and try again";
+
+
+	dropDataBase(doppelDbName); ///////////////////
 
 	return app.exec();
 }
 
 
 
-bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
+bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool)
 {
 	// Производим подключение к целевой БД
 
@@ -112,20 +121,30 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 
 		//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
 		//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
-
-		tempDbConnection = QSqlDatabase::addDatabase("QODBC", "mainDbConn"); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы не сработают. 
-		tempDbConnection.setDatabaseName(
-			"DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
-			"Server=127.0.0.1,1433;"
-			"Database=EnergyRes;"
-			"Uid=solovev;"
-			"Pwd=art54011212;"
-		);
+		if (!doppelBool)
+		{
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", "mainDbConn"); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы не сработают. 
+			tempDbConnection.setDatabaseName(
+				"DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
+				"Server=127.0.0.1,1433;"
+				"Database=EnergyRes;"
+				"Uid=solovev;"
+				"Pwd=art54011212;"
+			);
+		}
+		else
+		{
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", "doppelConn");
+			QString connStr = QString("DRIVER={ODBC Driver 17 for SQL Server};"
+				"Server=127.0.0.1,1433;DATABASE=%1;Trusted_Connection=yes;")
+				.arg(doppelDbName); // Windows Authentication
+			tempDbConnection.setDatabaseName(connStr);
+		}
 	}
 	else
 	{
 		tempDbConnection = QSqlDatabase::addDatabase("QODBC", "masterConn");
-		QString connStr = "DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
+		QString connStr = "DRIVER={ODBC Driver 17 for SQL Server};"
 			"Server=127.0.0.1,1433;DATABASE=master;Trusted_Connection=yes;"; // Windows Authentication
 		tempDbConnection.setDatabaseName(connStr);
 	}
@@ -148,8 +167,14 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool)
 	}
 	else
 	{
-		nameDb = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
-		qDebug() << "DataBase is CONNECT to " + nameDb + " with connection name = " + tempDbConnection.connectionName() << '\n';
+		QString tempName  = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
+		qDebug() << "DataBase is CONNECT to " + (doppelBool == true ? doppelDbName : tempName) + " with connection name = " + tempDbConnection.connectionName() << '\n';
+
+		if (masterBool)
+			masterDbName = "master";
+		if(!masterBool && !doppelBool)
+			mainDbName = getDataBaseName(tempDbConnection.databaseName());
+
 		return true;
 	}
 }
@@ -168,8 +193,8 @@ FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA = 'dbo' AND TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :dbNameFromConnect
         )");
 
-	tablesQuery.bindValue(":dbNameFromConnect", nameDb);
-	//tablesQuery.addBindValue(nameDb); Альтернатива. Будет добавлен вместо ? в запросе
+	tablesQuery.bindValue(":dbNameFromConnect", mainDbName);
+	//tablesQuery.addBindValue(mainDbName); Альтернатива. Будет добавлен вместо ? в запросе
 
 	if (!tablesQuery.exec() || !tablesQuery.next())
 	{
@@ -348,7 +373,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
-			qDebug() << createTableAndColumnInNewDb.lastQuery();
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
 				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
@@ -398,7 +422,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
-			qDebug() << createTableAndColumnInNewDb.lastQuery();
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
 				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
@@ -445,7 +468,52 @@ void dropDataBase(QString baseName)
 	QString queryString = QString("DROP DATABASE %1").arg(baseName);
 
 	if (!dropDataBaseQuery.exec(queryString))
-		std::cout << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+		std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
 	else
 		qDebug() << baseName + " was deleted";
+}
+
+
+
+void createView(QString baseName)
+{
+	QSqlQuery createViewQuery(doppelDb);
+
+	QList<QPair<QString, QString>>pairArrayForView;
+
+	QString queryViewString = QString("SELECT TABLE_NAME, VIEW_DEFINITION FROM %1.INFORMATION_SCHEMA.VIEWS WHERE TABLE_CATALOG = '%1' AND TABLE_SCHEMA = 'dbo'")
+		.arg(baseName);
+
+	if (!createViewQuery.exec(queryViewString) || !createViewQuery.next())
+	{
+		std::cout << createViewQuery.lastError().text().toStdString() << std::endl;
+		return;
+	}
+	else
+	{
+		do
+		{
+			pairArrayForView.push_back(qMakePair(createViewQuery.value(0).toString(), createViewQuery.value(1).toString()));
+		} while (createViewQuery.next());
+	}
+
+	for (int valueCounter = 0; valueCounter < pairArrayForView.length(); valueCounter++)
+	{
+		queryViewString = QString("%1")
+			.arg(pairArrayForView[valueCounter].second);
+
+		if (!createViewQuery.exec(queryViewString))
+		{
+			std::cout << createViewQuery.lastError().text().toStdString() << std::endl;
+			return;
+		}
+		else
+		{
+			qDebug() << "Add view " << pairArrayForView[valueCounter].first;
+		}
+	}
+
+	qDebug() << "";
+
+	doppelDb.close();
 }
