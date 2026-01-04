@@ -26,6 +26,8 @@ QString nameDb;
 QString doppelDbName;
 int counterForPercent = 1;
 bool checkDuplicateTableBool = false;
+bool createFromCopy = false;
+bool CopyWithData = false;
 
 struct TableColumnStruct
 {
@@ -67,6 +69,7 @@ int main(int argc, char* argv[])
 	QCoreApplication app(argc, argv);
 
 	checkDuplicateTableBool = true; /////////////////////////
+	//createFromCopy = true; /////////////////////////////
 
 	if (connectDataBase(mainDb, 0))
 	{
@@ -85,7 +88,7 @@ int main(int argc, char* argv[])
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
 
-	dropDataBase(doppelDbName); ///////////////////
+	//dropDataBase(doppelDbName); ///////////////////
 
 	return app.exec();
 }
@@ -331,74 +334,98 @@ SELECT *
 
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 {
-	// Проверяем наличие дубликатов таблиц в новой БД
-
 	QSqlQuery createTableAndColumnInNewDb(masterDb);
 	QString queryString;
 
-	if (checkDuplicateTableBool)
+	if (createFromCopy)
 	{
-		queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
-			.arg(baseName)
-			.arg(tableNameTemp);
+		// Создаём новую таблицу в новой БД через копирование структуры с данными или без них
+
+		CopyWithData == true ? queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2 WHERE 1 = 0") : queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2")
+			.arg(doppelDbName)
+			.arg(tableNameTemp)
+			.arg(getDataBaseName(mainDb.databaseName()));
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
+			qDebug() << createTableAndColumnInNewDb.lastQuery();
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
-				std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
 				structArrayForTable.clear();
 				return;
 			}
 		}
-		else
+	}
+	else
+	{
+		// Проверяем наличие дубликатов таблиц в новой БД
+
+		if (checkDuplicateTableBool)
 		{
-			if (createTableAndColumnInNewDb.isValid())
+			queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
+				.arg(baseName)
+				.arg(tableNameTemp);
+
+			if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 			{
-				qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
-				structArrayForTable.clear();
-				return;
+				if (createTableAndColumnInNewDb.lastError().isValid())
+				{
+					std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+					structArrayForTable.clear();
+					return;
+				}
+			}
+			else
+			{
+				if (createTableAndColumnInNewDb.isValid())
+				{
+					qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
+					structArrayForTable.clear();
+					return;
+				}
 			}
 		}
-	}
 
-	// Создаём новую таблицу в новой БД
+		// Создаём новую таблицу в новой БД через системные таблицы
 
-	queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
-		.arg(baseName)
-		.arg(tableNameTemp)
-		.arg(structArrayForTable[0].ColumnName)
-		.arg(structArrayForTable[0].dataType)
-		.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
-
-	if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
-	{
-		if (createTableAndColumnInNewDb.lastError().isValid())
-		{
-			std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
-			structArrayForTable.clear();
-			return;
-		}
-	}
-
-	// Добавляем оставшиеся столбцы в созданную таблицу
-
-	for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
-	{
-		queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
+		queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
 			.arg(baseName)
 			.arg(tableNameTemp)
-			.arg(structArrayForTable[counterColumn].ColumnName)
-			.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
-			.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
+			.arg(structArrayForTable[0].ColumnName)
+			.arg(structArrayForTable[0].dataType)
+			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
 
-		if (!createTableAndColumnInNewDb.exec(queryString))
+		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
+			qDebug() << createTableAndColumnInNewDb.lastQuery();
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
-				std::cout << "Error in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
 				structArrayForTable.clear();
 				return;
+			}
+		}
+
+		// Добавляем оставшиеся столбцы в созданную таблицу
+
+		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
+		{
+			queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
+				.arg(baseName)
+				.arg(tableNameTemp)
+				.arg(structArrayForTable[counterColumn].ColumnName)
+				.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
+				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
+
+			if (!createTableAndColumnInNewDb.exec(queryString))
+			{
+				if (createTableAndColumnInNewDb.lastError().isValid())
+				{
+					std::cout << "Error in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+					structArrayForTable.clear();
+					return;
+				}
 			}
 		}
 	}
