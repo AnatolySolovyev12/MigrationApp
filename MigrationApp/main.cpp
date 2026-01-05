@@ -14,6 +14,7 @@ void readTablesInMainDb(QString baseName, QString tableNameTemp);
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
 void dropDataBase(QString baseName);
 void createView(QString baseName);
+void createRole();
 
 
 
@@ -96,6 +97,7 @@ int main(int argc, char* argv[])
 	else
 		qDebug() << "Check your setting for connect to master DataBase and try again";
 
+	createRole();
 
 	dropDataBase(doppelDbName); ///////////////////
 
@@ -167,12 +169,12 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 	}
 	else
 	{
-		QString tempName  = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
+		QString tempName = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
 		qDebug() << "DataBase is CONNECT to " + (doppelBool == true ? doppelDbName : tempName) + " with connection name = " + tempDbConnection.connectionName() << '\n';
 
 		if (masterBool)
 			masterDbName = "master";
-		if(!masterBool && !doppelBool)
+		if (!masterBool && !doppelBool)
 			mainDbName = getDataBaseName(tempDbConnection.databaseName());
 
 		return true;
@@ -343,14 +345,14 @@ SELECT *
 
 	// высчитываем процент выполнения создания новых таблиц в новой БД
 
+	counterForPercent++;
+
 	double percentDouble = static_cast<double>(counterForPercent) / stringTablesArray.length() * 100.0;
-	int percent = static_cast<int>(std::min(percentDouble, 100.0));
+	int percent = static_cast<int>(std::min(percentDouble, 100.0)); // вприсваиваем меньшее значение
 
 	std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add table " + tableNameTemp.toStdString();
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
-
-	counterForPercent++;
 
 	structArrayForTable.clear();
 }
@@ -458,6 +460,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 void dropDataBase(QString baseName)
 {
+	doppelDb.close();
+
 	if (baseName == "")
 	{
 		qDebug() << "baseName is void. Try again and check your params";
@@ -509,11 +513,85 @@ void createView(QString baseName)
 		}
 		else
 		{
-			qDebug() << "Add view " << pairArrayForView[valueCounter].first;
+			counterForPercent++;
+
+			double percentDouble = static_cast<double>(counterForPercent) / pairArrayForView.length() * 100.0;
+			int percent = static_cast<int>(std::min(percentDouble, 100.0)); // вприсваиваем меньшее значение
+
+			std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add view " + pairArrayForView[valueCounter].first.toStdString();
+
+			std::cout << "\r\x1b[2K" << tempForStdOut << std::flush;// делаем возврат корретки в текущей строке и затираем всю строку.
+
+
 		}
 	}
 
-	qDebug() << "";
+	qDebug() << "\n";
 
-	doppelDb.close();
+	counterForPercent = 0;
+}
+
+
+
+void createRole()
+{
+	QSqlQuery genQuery(masterDb);
+
+	QStringList createScripts;
+
+	QString tempQuery = QString(R"(
+    SELECT 'CREATE LOGIN [' + name + '] WITH PASSWORD = ' + 
+           CONVERT(varchar(256), password_hash, 1) + ' HASHED, 
+           SID = ' + CONVERT(varchar(256), sid, 1) + 
+           CASE WHEN default_database_name IS NOT NULL 
+                THEN ', DEFAULT_DATABASE=[' + default_database_name + ']'
+                ELSE '' END
+    FROM sys.sql_logins WHERE type = 'S' AND default_database_name != 'master')");
+	
+	if (!genQuery.exec(tempQuery) || !genQuery.next())
+	{
+		qDebug() << "Error";
+		std::cout << genQuery.lastError().text().toStdString();
+	}
+	else
+	{
+		qDebug() << genQuery.lastQuery();
+		qDebug() << "";
+
+		do 
+		{
+			QString script = genQuery.value(0).toString();
+
+			qDebug() << "Script: " << script;
+			qDebug() << "";
+
+			if (!script.isEmpty())
+			{
+				createScripts << script;
+			}
+			else
+			{
+				qDebug() << "Query is empty";
+			}
+
+		} while (genQuery.next());
+	}
+
+	qDebug() << createScripts;
+
+	QSqlQuery applyQuery(doppelDb);
+
+	for (const QString& script : createScripts) 
+	{
+		if (!applyQuery.exec(script)) 
+		{
+			qDebug() << "Error:" << applyQuery.lastError().text();
+			qDebug() << "Failed script:" << script;
+		}
+		else
+		{
+			qDebug() << applyQuery.lastQuery();
+			qDebug() << "\n";
+		}
+	}
 }
