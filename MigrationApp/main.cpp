@@ -9,12 +9,14 @@
 bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool);
 bool getTablesArray();
 QString getDataBaseName(QString paramString);
-void createDoppelDbFromMain(QString tempName);
+bool createDoppelDbFromMain(QString tempName);
 void readTablesInMainDb(QString baseName, QString tableNameTemp);
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
 void dropDataBase(QString baseName);
 void createView(QString baseName);
-void createRole();
+void createLogin();
+void createUser();
+void dropRole();
 
 
 
@@ -80,7 +82,18 @@ int main(int argc, char* argv[])
 		if (getTablesArray())
 		{
 			if (connectDataBase(masterDb, 1, 0))
-				createDoppelDbFromMain(getDataBaseName(mainDb.databaseName()));
+			{
+				if (createDoppelDbFromMain(getDataBaseName(mainDb.databaseName())))
+				{
+					if (connectDataBase(doppelDb, 0, 1))
+					{
+						createView(mainDbName);
+						createLogin();
+					}
+					else
+						qDebug() << "Check your setting for connect to doppelDb DataBase and try again";
+				}
+			}
 			else
 				qDebug() << "Check your setting for connect to master DataBase and try again";
 		}
@@ -92,14 +105,9 @@ int main(int argc, char* argv[])
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
 
-	if (connectDataBase(doppelDb, 0, 1))
-		createView(mainDbName);
-	else
-		qDebug() << "Check your setting for connect to master DataBase and try again";
-
-	createRole();
-
-	dropDataBase(doppelDbName); ///////////////////
+	createUser();
+	//dropDataBase(doppelDbName); ///////////////////
+	//dropRole(); ///////////////////
 
 	return app.exec();
 }
@@ -226,7 +234,7 @@ QString getDataBaseName(QString paramString)
 
 
 
-void createDoppelDbFromMain(QString tempName)
+bool createDoppelDbFromMain(QString tempName)
 {
 	// Создаём новую БД с изменённым именем
 
@@ -247,7 +255,7 @@ WHERE name = :tableNameCheck
 		if (createBase.lastError().isValid())
 		{
 			std::cout << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text().toStdString() << std::endl;
-			return;
+			return false;
 		}
 
 		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(doppelDbName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
@@ -258,6 +266,8 @@ WHERE name = :tableNameCheck
 			std::cout << createBase.lastError().text().toStdString() << std::endl;
 			std::cout << createBase.lastError().databaseText().toStdString() << std::endl;
 			std::cout << createBase.lastError().driverText().toStdString() << std::endl;
+
+			return false;
 		}
 		else
 		{
@@ -268,8 +278,8 @@ WHERE name = :tableNameCheck
 	{
 		if (createBase.isValid())
 		{
-			qDebug() << "DataBase with this name exists. Try use other name or check this DataBase\n";
-			return;
+			qDebug() << "DataBase with" << doppelDbName << "name exist. Try use other name or check this DataBase\n";
+			return false;
 		}
 	}
 
@@ -280,6 +290,8 @@ WHERE name = :tableNameCheck
 
 	qDebug() << "\n";
 	counterForPercent = 0;
+
+	return true;
 }
 
 
@@ -474,7 +486,7 @@ void dropDataBase(QString baseName)
 	if (!dropDataBaseQuery.exec(queryString))
 		std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
 	else
-		qDebug() << baseName + " was deleted";
+		qDebug() << "DataBase " << baseName << " was deleted\n";
 }
 
 
@@ -490,7 +502,7 @@ void createView(QString baseName)
 
 	if (!createViewQuery.exec(queryViewString) || !createViewQuery.next())
 	{
-		std::cout << createViewQuery.lastError().text().toStdString() << std::endl;
+		std::cout << "Error in createView when try to get all views: " << createViewQuery.lastError().text().toStdString() << std::endl;
 		return;
 	}
 	else
@@ -508,7 +520,7 @@ void createView(QString baseName)
 
 		if (!createViewQuery.exec(queryViewString))
 		{
-			std::cout << createViewQuery.lastError().text().toStdString() << std::endl;
+			std::cout << "Error in createView when try to create view: " << pairArrayForView[valueCounter].first.toStdString() << "\n" << createViewQuery.lastError().text().toStdString() << std::endl;
 			return;
 		}
 		else
@@ -526,44 +538,38 @@ void createView(QString baseName)
 		}
 	}
 
-	qDebug() << "\n";
+	qDebug() << "";
 
 	counterForPercent = 0;
 }
 
 
 
-void createRole()
+void createLogin()
 {
 	QSqlQuery genQuery(masterDb);
 
 	QStringList createScripts;
 
 	QString tempQuery = QString(R"(
-    SELECT 'CREATE LOGIN [' + name + '] WITH PASSWORD = ' + 
-           CONVERT(varchar(256), password_hash, 1) + ' HASHED, 
-           SID = ' + CONVERT(varchar(256), sid, 1) + 
-           CASE WHEN default_database_name IS NOT NULL 
-                THEN ', DEFAULT_DATABASE=[' + default_database_name + ']'
-                ELSE '' END
-    FROM sys.sql_logins WHERE type = 'S' AND default_database_name != 'master')");
-	
+    SELECT 'CREATE LOGIN [' + name + '_doppelganger' + '] WITH PASSWORD = ' + 
+       CONVERT(varchar(256), password_hash, 1) + ' HASHED, ' + ' CHECK_POLICY = OFF, ' +
+       CASE WHEN default_database_name IS NOT NULL 
+            THEN ' DEFAULT_DATABASE=[' + default_database_name + ']'
+            ELSE '' END
+FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND default_database_name != 'master')");
+
 	if (!genQuery.exec(tempQuery) || !genQuery.next())
 	{
-		qDebug() << "Error";
-		std::cout << genQuery.lastError().text().toStdString();
+		std::cout << "Error in createRole when try to get all script: " << genQuery.lastError().text().toStdString();
 	}
 	else
 	{
-		qDebug() << genQuery.lastQuery();
 		qDebug() << "";
 
-		do 
+		do
 		{
 			QString script = genQuery.value(0).toString();
-
-			qDebug() << "Script: " << script;
-			qDebug() << "";
 
 			if (!script.isEmpty())
 			{
@@ -577,21 +583,71 @@ void createRole()
 		} while (genQuery.next());
 	}
 
-	qDebug() << createScripts;
-
 	QSqlQuery applyQuery(doppelDb);
 
-	for (const QString& script : createScripts) 
+	for (const QString& script : createScripts)
 	{
-		if (!applyQuery.exec(script)) 
+		if (!applyQuery.exec(script))
 		{
-			qDebug() << "Error:" << applyQuery.lastError().text();
-			qDebug() << "Failed script:" << script;
+			qDebug() << "Error in createRole when try create new login:" << applyQuery.lastError().text();
+			qDebug() << "Failed script:" << script << "\n";
 		}
 		else
-		{
-			qDebug() << applyQuery.lastQuery();
-			qDebug() << "\n";
-		}
+			qDebug() << applyQuery.lastQuery() << "\n";
+
+	}
+}
+
+
+
+void dropRole()
+{
+	QSqlQuery getQuery(masterDb);
+	QSqlQuery dropQuery(masterDb);
+
+	QString tempQueryString = QString("SELECT NAME FROM master.sys.sql_logins WHERE NAME LIKE '%_doppelganger'");
+
+	if (!getQuery.exec(tempQueryString) || !getQuery.next())
+	{
+		qDebug() << getQuery.lastQuery();
+		std::cout << "Error in dropRole when try to get all login with _dopprlganger " + getQuery.lastError().text().toStdString() << std::endl;
+	}
+	else
+	{
+		do {
+			if (!dropQuery.exec(QString("DROP LOGIN %1").arg(getQuery.value(0).toString())))
+			{
+				std::cout << "Error in dropRole when try delet login " << getQuery.value(0).toString().toStdString() << ": " << dropQuery.lastError().text().toStdString() << std::endl;
+			}
+			else
+				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
+		} while (getQuery.next());
+	}
+}
+
+
+
+void createUser()
+{
+	QSqlQuery getQuery(doppelDb);
+	QSqlQuery createQuery(doppelDb);
+
+	QString tempQueryString = QString("SELECT NAME FROM sys.sql_logins WHERE NAME LIKE '%_doppelganger'");
+
+	if (!getQuery.exec(tempQueryString) || !getQuery.next())
+	{
+		qDebug() << getQuery.lastQuery();
+		std::cout << "Error in createUser when try to get all login with _dopprlganger " + getQuery.lastError().text().toStdString() << std::endl;
+	}
+	else
+	{
+		do {
+			if (!createQuery.exec(QString("CREATE USER %1 FOR LOGIN %1").arg(getQuery.value(0).toString())))
+			{
+				std::cout << "Error in createUser when try create user " << getQuery.value(0).toString().toStdString() << ": " << createQuery.lastError().text().toStdString() << std::endl;
+			}
+			else
+				qDebug() << "User " << getQuery.value(0).toString() << " was create for " << doppelDbName;
+		} while (getQuery.next());
 	}
 }
