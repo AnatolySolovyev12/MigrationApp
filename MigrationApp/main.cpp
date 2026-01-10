@@ -3,6 +3,7 @@
 #include <QSqlError>
 #include <qsqlquery>
 #include <iostream>
+#include <QRegularExpression>
 
 
 
@@ -15,8 +16,11 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
 void dropDataBase(QString baseName);
 void createView(QString baseName);
 void createLogin();
-void createUser();
+bool createUser();
 void dropRole();
+QString validateHost();
+QString validateBaseLoginPass(int number);
+void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
 
 
 
@@ -29,6 +33,7 @@ QSqlDatabase doppelDb;
 QString mainDbName;
 QString masterDbName;
 QString doppelDbName;
+QString temporaryDbName;
 
 int counterForPercent = 1;
 bool checkDuplicateTableBool = false;
@@ -77,22 +82,36 @@ int main(int argc, char* argv[])
 	//checkDuplicateTableBool = true; /////////////////////////
 	//createFromCopy = true; /////////////////////////////
 
+	qDebug() << "Trying connecting to main DataBase (Donor)\n";
+
 	if (connectDataBase(mainDb, 0, 0))
 	{
 		if (getTablesArray())
 		{
+			qDebug() << "Trying connecting to master DataBase\n";
+
 			if (connectDataBase(masterDb, 1, 0))
 			{
-				if (createDoppelDbFromMain(getDataBaseName(mainDb.databaseName())))
+				if (createDoppelDbFromMain(mainDbName))
 				{
-					if (connectDataBase(doppelDb, 0, 1))
+					qDebug() << "Trying create logins for " << doppelDbName << "\n";
+					createLogin();
+
+					qDebug() << "Trying create users for " << doppelDbName << "\n";
+
+					if (createUser())
 					{
-						createView(mainDbName);
-						createLogin();
-						createUser();
+						qDebug() << "Trying connecting to doppelganger DataBase\n";
+
+						if (connectDataBase(doppelDb, 0, 1))
+						{
+							createView(mainDbName);
+						}
+						else
+							qDebug() << "Check your setting for connect to doppelDb DataBase and try again";
 					}
 					else
-						qDebug() << "Check your setting for connect to doppelDb DataBase and try again";
+						qDebug() << "Fail when trying to create users for " << doppelDbName << "\n";
 				}
 			}
 			else
@@ -115,86 +134,22 @@ int main(int argc, char* argv[])
 
 bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool)
 {
-	// Производим подключение к целевой БД
+	// Производим подключение к целевой БД. Запрашиваем и валидируем данные для пордключения к БД
 
 	if (!masterBool)
 	{
 		if (!doppelBool)
 		{
-			std::string typeOfDb;
-			std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
-
-			do {
-				std::cin >> typeOfDb;
-				if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
-				qDebug() << "Incorrect symbol. Try again";
-			} while (true);
-
-			if (typeOfDb == "S" || typeOfDb == "s")
-			{
-				tempDbConnection = QSqlDatabase::addDatabase("QODBC", "mainDbConn"); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы не сработают. 
-				tempDbConnection.setDatabaseName(
-					"DRIVER={ODBC Driver 17 for SQL Server};" // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
-					"Server=127.0.0.1,1433;"
-					"Database=EnergyRes;"
-					"Uid=solovev;"
-					"Pwd=art54011212;"
-				);
-			}
-			else
-			{
-				/*
-mainDb = QSqlDatabase::addDatabase("QPSQL"); // Работаем используя библиотеки (PostgreSQL) и отдельные методы для подключения. Вкладываем их потом в папку с программой.
-mainDb.setHostName("192.168.56.101");
-mainDb.setDatabaseName("testdb");
-mainDb.setUserName("solovev");
-mainDb.setPassword("art54011212");
-mainDb.setPort(5432);  // По умолчанию 5432
-*/
-
-//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
-//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
-			}
+			addParamForDbConnection(tempDbConnection, "mainDbConn");
 		}
 		else
 		{
-			std::string typeOfDb;
-			std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
-
-			do {
-				std::cin >> typeOfDb;
-				if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
-				qDebug() << "Incorrect symbol. Try again";
-			} while (true);
-
-			if (typeOfDb == "S" || typeOfDb == "s")
-			{
-				tempDbConnection = QSqlDatabase::addDatabase("QODBC", "doppelConn");
-				QString connStr = QString("DRIVER={ODBC Driver 17 for SQL Server};"
-					"Server=127.0.0.1,1433;DATABASE=%1;Trusted_Connection=yes;")
-					.arg(doppelDbName); // Windows Authentication
-				tempDbConnection.setDatabaseName(connStr);
-			}
+			addParamForDbConnection(tempDbConnection, "doppelConn");
 		}
 	}
 	else
 	{
-		std::string typeOfDb;
-		std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
-
-		do {
-			std::cin >> typeOfDb;
-			if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
-			qDebug() << "Incorrect symbol. Try again";
-		} while (true);
-
-		if (typeOfDb == "S" || typeOfDb == "s")
-		{
-			tempDbConnection = QSqlDatabase::addDatabase("QODBC", "masterConn");
-			QString connStr = "DRIVER={ODBC Driver 17 for SQL Server};"
-				"Server=127.0.0.1,1433;DATABASE=master;Trusted_Connection=yes;"; // Windows Authentication
-			tempDbConnection.setDatabaseName(connStr);
-		}
+		addParamForDbConnection(tempDbConnection, "masterConn");
 	}
 
 	if (!tempDbConnection.open())
@@ -215,13 +170,22 @@ mainDb.setPort(5432);  // По умолчанию 5432
 	}
 	else
 	{
-		QString tempName = masterBool == true ? "master using Windows Authentication" : getDataBaseName(tempDbConnection.databaseName());
-		qDebug() << "DataBase is CONNECT to " + (doppelBool == true ? doppelDbName : tempName) + " with connection name = " + tempDbConnection.connectionName() << '\n';
-
 		if (masterBool)
-			masterDbName = "master";
+		{
+			masterDbName = temporaryDbName;
+		}
 		if (!masterBool && !doppelBool)
-			mainDbName = getDataBaseName(tempDbConnection.databaseName());
+		{
+			mainDbName = temporaryDbName;
+		}
+		if (doppelBool)
+		{
+			doppelDbName = temporaryDbName;
+		}
+		
+		qDebug() << "\nDataBase is CONNECT to " << temporaryDbName << " with connection name = " << tempDbConnection.connectionName() << '\n';
+
+		temporaryDbName = "";
 
 		return true;
 	}
@@ -665,7 +629,7 @@ void dropRole()
 
 
 
-void createUser()
+bool createUser()
 {
 	QSqlQuery getQuery(doppelDb);
 	QSqlQuery createQuery(doppelDb);
@@ -688,5 +652,148 @@ void createUser()
 			else
 				qDebug() << "User " << getQuery.value(0).toString() << " was create for " << doppelDbName << "\n";
 		} while (getQuery.next());
+
+		return true;
+	}
+}
+
+
+
+QString validateHost()
+{
+	// Запрашиваем и валидируем хост
+
+	std::string host;
+	std::cout << "What host use to connect (IP,Port)" << std::endl;
+
+	do {
+		std::cin >> host;
+
+		QRegularExpression strPattern(QString(R"([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\,[0-9]{2,5})"));
+
+		QRegularExpressionMatch matchReg = strPattern.match(QString::fromStdString(host));
+
+		if (matchReg.hasMatch())
+		{
+			host = matchReg.captured().toStdString();
+			break;
+		}
+
+		qDebug() << "Not find in your messege host with format \"IP,Port\". Try again";
+	} while (true);
+
+	return QString::fromStdString(host);
+}
+
+
+
+QString validateBaseLoginPass(int number)
+{
+	std::string host;
+
+	switch (number)
+	{
+	case(1):
+	{
+		std::cout << "What name of DataBase?" << std::endl;
+		break;
+	}
+
+	case(2):
+	{
+		std::cout << "What login?" << std::endl;
+		break;
+	}
+
+	case(3):
+	{
+		std::cout << "What password?" << std::endl;
+		break;
+	}
+	}
+
+	do {
+		std::cin >> host;
+
+		if (host.length() < 50)
+		{
+			if (number == 1)
+				temporaryDbName = QString::fromStdString(host);
+			break;
+		}
+
+		qDebug() << "Too much length of you messege. Try again;";
+	} while (true);
+
+	return QString::fromStdString(host);
+}
+
+
+
+void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection)
+{
+	// Запрашиваем и валидируем данные для пордключения к БД
+
+	std::string typeOfDb;
+	std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
+
+	do {
+		std::cin >> typeOfDb;
+		if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
+		qDebug() << "Incorrect symbol. Try again";
+	} while (true);
+
+	if (typeOfDb == "S" || typeOfDb == "s")
+	{
+		std::string typeOfAuthentication;
+		std::cout << "What type of Authentication will use? (S/s - SQL authentication / W/w - Windows authentication)" << std::endl;
+
+		do {
+			std::cin >> typeOfAuthentication;
+			if (typeOfAuthentication == "S" || typeOfAuthentication == "s" || typeOfAuthentication == "W" || typeOfAuthentication == "w") break;
+			qDebug() << "Incorrect symbol. Try again";
+		} while (true);
+
+		if (typeOfAuthentication == "S" || typeOfAuthentication == "s")
+		{
+
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы частично работают лишь с пользовательским доменом.. 
+			tempDbConnection.setDatabaseName(
+				QString(R"(
+					DRIVER={ODBC Driver 17 for SQL Server};
+					Server=%1;
+					Database=%2;
+					Uid=%3;
+					Pwd=%4;
+)")
+.arg(validateHost())
+.arg(validateBaseLoginPass(1))
+.arg(validateBaseLoginPass(2))
+.arg(validateBaseLoginPass(3))
+
+); // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
+		}
+		else
+		{
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection);
+			QString connStr = QString("DRIVER={ODBC Driver 17 for SQL Server};Server=%1;DATABASE=%2;Trusted_Connection=yes;")
+				.arg(validateHost())
+				.arg(validateBaseLoginPass(1));
+			tempDbConnection.setDatabaseName(connStr);
+		}
+	}
+	else
+	{
+		/*
+mainDb = QSqlDatabase::addDatabase("QPSQL"); // Работаем используя библиотеки (PostgreSQL) и отдельные методы для подключения. Вкладываем их потом в папку с программой.
+mainDb.setHostName("192.168.56.101");
+mainDb.setDatabaseName("testdb");
+mainDb.setUserName("solovev");
+mainDb.setPassword("art54011212");
+mainDb.setPort(5432);  // По умолчанию 5432
+*/
+
+//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
+//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
 	}
 }
