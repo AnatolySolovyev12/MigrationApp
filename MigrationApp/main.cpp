@@ -485,6 +485,12 @@ void dropDataBase(QString baseName)
 	QSqlQuery dropDataBaseQuery(masterDb);
 	QString queryString = QString("DROP DATABASE %1").arg(baseName);
 
+	dropDataBaseQuery.exec("USE master;");
+
+	if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
+		std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+
+
 	if (!dropDataBaseQuery.exec(queryString))
 		std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
 	else
@@ -631,8 +637,8 @@ void dropRole()
 
 bool createUser()
 {
-	QSqlQuery getQuery(doppelDb);
-	QSqlQuery createQuery(doppelDb);
+	QSqlQuery getQuery(mainDb);
+	QSqlQuery createQuery(mainDb);
 
 
 	QString tempQueryString = QString("SELECT NAME FROM sys.sql_logins WHERE default_database_name != 'master'");
@@ -645,9 +651,11 @@ bool createUser()
 	else
 	{
 		do {
-			if (!createQuery.exec(QString("CREATE USER %1 FOR LOGIN %1").arg(getQuery.value(0).toString())))
+			if (!createQuery.exec(QString("USE %1 CREATE USER %2 FOR LOGIN %2 ALTER ROLE db_datareader ADD MEMBER %2 ALTER ROLE db_datawriter ADD MEMBER %2;")
+				.arg(doppelDbName)
+				.arg(getQuery.value(0).toString())))
 			{
-				std::cout << "Error in createUser when try create user " << getQuery.value(0).toString().toStdString() << ": " << createQuery.lastError().text().toStdString() << std::endl;
+				std::cout << "Error in createUser when try create user " << getQuery.value(0).toString().toStdString() << ": " << createQuery.lastError().text().toStdString() << "\n" << createQuery.lastQuery().toStdString() << std::endl;
 			}
 			else
 				qDebug() << "User " << getQuery.value(0).toString() << " was create for " << doppelDbName << "\n";
