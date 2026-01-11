@@ -558,14 +558,14 @@ void createLogin()
 	QSqlQuery genQuery(masterDb);
 
 	QStringList createScripts;
-	// SELECT 'CREATE LOGIN [' + name + '_doppelganger' + '] WITH PASSWORD = ' + 
+
 	QString tempQuery = QString(R"(
     SELECT 'CREATE LOGIN [' + name + '] WITH PASSWORD = ' + 
        CONVERT(varchar(256), password_hash, 1) + ' HASHED, ' + ' CHECK_POLICY = OFF, ' +
        CASE WHEN default_database_name IS NOT NULL 
             THEN ' DEFAULT_DATABASE=[' + default_database_name + ']'
             ELSE '' END
-FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND default_database_name != 'master')");
+FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND default_database_name != 'master' AND default_database_name = '%1')").arg(mainDbName);
 
 	if (!genQuery.exec(tempQuery) || !genQuery.next())
 	{
@@ -613,7 +613,7 @@ bool createUser()
 	QSqlQuery getQuery(mainDb);
 	QSqlQuery createQuery(masterDb);
 
-	QString tempQueryString = QString("SELECT NAME FROM sys.sql_logins WHERE default_database_name != 'master'");
+	QString tempQueryString = QString("SELECT NAME FROM sys.sql_logins WHERE default_database_name != 'master' AND default_database_name = '%1'").arg(mainDbName);
 
 	if (!getQuery.exec(tempQueryString) || !getQuery.next())
 	{
