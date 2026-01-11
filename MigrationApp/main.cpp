@@ -95,6 +95,7 @@ int main(int argc, char* argv[])
 				if (createDoppelDbFromMain(mainDbName))
 				{
 					qDebug() << "Trying create logins for " << doppelDbName << "\n";
+					
 					createLogin();
 
 					qDebug() << "Trying create users for " << doppelDbName << "\n";
@@ -501,6 +502,7 @@ void dropDataBase(QString baseName)
 
 void createView(QString baseName)
 {
+	QSqlQuery readViewQuery(mainDb);
 	QSqlQuery createViewQuery(doppelDb);
 
 	QList<QPair<QString, QString>>pairArrayForView;
@@ -508,19 +510,19 @@ void createView(QString baseName)
 	QString queryViewString = QString("SELECT TABLE_NAME, VIEW_DEFINITION FROM %1.INFORMATION_SCHEMA.VIEWS WHERE TABLE_CATALOG = '%1' AND TABLE_SCHEMA = 'dbo'")
 		.arg(baseName);
 
-	if (!createViewQuery.exec(queryViewString) || !createViewQuery.next())
+	if (!readViewQuery.exec(queryViewString) || !readViewQuery.next())
 	{
-		std::cout << "Error in createView when try to get all views: " << createViewQuery.lastError().text().toStdString() << std::endl;
+		std::cout << "Error in createView when try to get all views: " << readViewQuery.lastError().text().toStdString() << std::endl;
 		return;
 	}
 	else
 	{
 		do
 		{
-			pairArrayForView.push_back(qMakePair(createViewQuery.value(0).toString(), createViewQuery.value(1).toString()));
-		} while (createViewQuery.next());
+			pairArrayForView.push_back(qMakePair(readViewQuery.value(0).toString(), readViewQuery.value(1).toString()));
+		} while (readViewQuery.next());
 	}
-
+	
 	for (int valueCounter = 0; valueCounter < pairArrayForView.length(); valueCounter++)
 	{
 		queryViewString = QString("%1")
@@ -541,12 +543,10 @@ void createView(QString baseName)
 			std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add view " + pairArrayForView[valueCounter].first.toStdString();
 
 			std::cout << "\r\x1b[2K" << tempForStdOut << std::flush;// делаем возврат корретки в текущей строке и затираем всю строку.
-
-
 		}
 	}
 
-	qDebug() << "";
+	qDebug() << "\n";
 
 	counterForPercent = 0;
 }
@@ -569,7 +569,7 @@ FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND defa
 
 	if (!genQuery.exec(tempQuery) || !genQuery.next())
 	{
-		std::cout << "Error in createRole when try to get all script: " << genQuery.lastError().text().toStdString();
+		std::cout << "Error in createRole when try to get all script: " << genQuery.lastError().text().toStdString() << genQuery.lastQuery().toStdString() << "\n\n" << std::endl;
 	}
 	else
 	{
@@ -608,38 +608,10 @@ FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND defa
 
 
 
-void dropRole()
-{
-	QSqlQuery getQuery(masterDb);
-	QSqlQuery dropQuery(masterDb);
-
-	QString tempQueryString = QString("SELECT NAME FROM master.sys.sql_logins WHERE NAME LIKE '%_doppelganger'");
-
-	if (!getQuery.exec(tempQueryString) || !getQuery.next())
-	{
-		qDebug() << getQuery.lastQuery();
-		std::cout << "Error in dropRole when try to get all login with _dopprlganger " + getQuery.lastError().text().toStdString() << std::endl;
-	}
-	else
-	{
-		do {
-			if (!dropQuery.exec(QString("DROP LOGIN %1").arg(getQuery.value(0).toString())))
-			{
-				std::cout << "Error in dropRole when try delet login " << getQuery.value(0).toString().toStdString() << ": " << dropQuery.lastError().text().toStdString() << std::endl;
-			}
-			else
-				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
-		} while (getQuery.next());
-	}
-}
-
-
-
 bool createUser()
 {
 	QSqlQuery getQuery(mainDb);
-	QSqlQuery createQuery(mainDb);
-
+	QSqlQuery createQuery(masterDb);
 
 	QString tempQueryString = QString("SELECT NAME FROM sys.sql_logins WHERE default_database_name != 'master'");
 
@@ -650,8 +622,10 @@ bool createUser()
 	}
 	else
 	{
+		// даЄм дополнительные права на выполнение DDL запросов дл€ создани€ представлений и прочего
+
 		do {
-			if (!createQuery.exec(QString("USE %1 CREATE USER %2 FOR LOGIN %2 ALTER ROLE db_datareader ADD MEMBER %2 ALTER ROLE db_datawriter ADD MEMBER %2;")
+			if (!createQuery.exec(QString("USE %1 CREATE USER %2 FOR LOGIN %2 ALTER ROLE db_datareader ADD MEMBER %2 ALTER ROLE db_datawriter ADD MEMBER %2 ALTER ROLE db_ddladmin ADD MEMBER %2;")
 				.arg(doppelDbName)
 				.arg(getQuery.value(0).toString())))
 			{
@@ -803,5 +777,32 @@ mainDb.setPort(5432);  // ѕо умолчанию 5432
 
 //QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  –аботаем через QODBC в таком варианте дл€ подключени€ напр€мую к PostgreSQL (работает без отдельных библиотек)
 //mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
+	}
+}
+
+
+
+void dropRole()
+{
+	QSqlQuery getQuery(masterDb);
+	QSqlQuery dropQuery(masterDb);
+
+	QString tempQueryString = QString("SELECT NAME FROM master.sys.sql_logins WHERE NAME LIKE '%_doppelganger'");
+
+	if (!getQuery.exec(tempQueryString) || !getQuery.next())
+	{
+		qDebug() << getQuery.lastQuery();
+		std::cout << "Error in dropRole when try to get all login with _dopprlganger " + getQuery.lastError().text().toStdString() << std::endl;
+	}
+	else
+	{
+		do {
+			if (!dropQuery.exec(QString("DROP LOGIN %1").arg(getQuery.value(0).toString())))
+			{
+				std::cout << "Error in dropRole when try delet login " << getQuery.value(0).toString().toStdString() << ": " << dropQuery.lastError().text().toStdString() << std::endl;
+			}
+			else
+				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
+		} while (getQuery.next());
 	}
 }
