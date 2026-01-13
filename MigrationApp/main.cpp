@@ -7,40 +7,6 @@
 
 
 
-bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool);
-bool getTablesArray();
-QString getDataBaseName(QString paramString);
-bool createDoppelDbFromMain(QString tempName);
-void readTablesInMainDb(QString baseName, QString tableNameTemp);
-void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
-void dropDataBase(QString baseName);
-void createView(QString baseName);
-void createLogin();
-bool createUser();
-void dropRole();
-QString validateHost();
-QString validateBaseLoginPass(int number);
-void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
-QString validateTypeOfColumn(QString any, QString maxLength);
-
-
-
-QList<QString>stringTablesArray;
-
-QSqlDatabase mainDb;
-QSqlDatabase masterDb;
-QSqlDatabase doppelDb;
-
-QString mainDbName;
-QString masterDbName;
-QString doppelDbName;
-QString temporaryDbName;
-
-int counterForPercent = 1;
-bool checkDuplicateTableBool = false;
-bool createFromCopy = false;
-bool CopyWithData = false;
-
 struct TableColumnStruct
 {
 	QString tableCatalog = "";
@@ -67,6 +33,42 @@ struct TableColumnStruct
 	QString domainSchena = "";
 	QString domainName = "";
 };
+
+bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool);
+bool getTablesArray();
+QString getDataBaseName(QString paramString);
+bool createDoppelDbFromMain(QString tempName);
+void readTablesInMainDb(QString baseName, QString tableNameTemp);
+void createTablesInDoppelDb(QString baseName, QString tableNameTemp);
+void dropDataBase(QString baseName);
+void createView(QString baseName);
+void createLogin();
+bool createUser();
+void dropRole();
+QString validateHost();
+QString validateBaseLoginPass(int number);
+void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
+QString validateTypeOfColumn(QString any, QString maxLength);
+void addValueInNewDb(TableColumnStruct any);
+
+
+QList<QString>stringTablesArray;
+
+QSqlDatabase mainDb;
+QSqlDatabase masterDb;
+QSqlDatabase doppelDb;
+
+QString mainDbName;
+QString masterDbName;
+QString doppelDbName;
+QString temporaryDbName;
+
+int counterForPercent = 1;
+bool checkDuplicateTableBool = false;
+bool createFromCopy = false;
+bool CopyWithData = false;
+
+
 
 QList<TableColumnStruct>structArrayForTable;
 
@@ -364,13 +366,15 @@ SELECT *
 	counterForPercent++;
 
 	double percentDouble = static_cast<double>(counterForPercent) / stringTablesArray.length() * 100.0;
-	int percent = static_cast<int>(std::min(percentDouble, 100.0)); // вприсваиваем меньшее значение
+	int percent = static_cast<int>(std::min(percentDouble, 100.0)); // присваиваем меньшее значение чтобы не превышать 100
 
 	std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add table " + tableNameTemp.toStdString();
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
 	structArrayForTable.clear();
+
+
 }
 
 
@@ -847,4 +851,16 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 		returnString = any;
 
 	return returnString;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+void addValueInNewDb(TableColumnStruct any)
+{
+	QSqlQuery selectQuery(mainDb);
+
+
+	structArrayForTable[0].ColumnName;
+
+
 }
