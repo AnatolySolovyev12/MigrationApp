@@ -21,6 +21,7 @@ void dropRole();
 QString validateHost();
 QString validateBaseLoginPass(int number);
 void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
+QString validateTypeOfColumn(QString any, QString maxLength);
 
 
 
@@ -95,7 +96,7 @@ int main(int argc, char* argv[])
 				if (createDoppelDbFromMain(mainDbName))
 				{
 					qDebug() << "Trying create logins for " << doppelDbName << "\n";
-					
+
 					createLogin();
 
 					qDebug() << "Trying create users for " << doppelDbName << "\n";
@@ -126,7 +127,7 @@ int main(int argc, char* argv[])
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
 
-	dropDataBase(doppelDbName); ///////////////////
+	//dropDataBase(doppelDbName); ///////////////////
 
 	return app.exec();
 }
@@ -183,7 +184,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 		{
 			doppelDbName = temporaryDbName;
 		}
-		
+
 		qDebug() << "\nDataBase is CONNECT to " << temporaryDbName << " with connection name = " << tempDbConnection.connectionName() << '\n';
 
 		temporaryDbName = "";
@@ -392,7 +393,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
-				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				std::cout << "\nError in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
 				structArrayForTable.clear();
 				return;
 			}
@@ -431,9 +432,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		// Создаём новую таблицу в новой БД через системные таблицы
 
 		queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
-			.arg(baseName)
-			.arg(tableNameTemp)
-			.arg(structArrayForTable[0].ColumnName)
+			.arg('[' + baseName + ']')
+			.arg('[' + tableNameTemp + ']')
+			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(structArrayForTable[0].dataType)
 			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
 
@@ -452,17 +453,17 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
 		{
 			queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
-				.arg(baseName)
-				.arg(tableNameTemp)
-				.arg(structArrayForTable[counterColumn].ColumnName)
-				.arg(structArrayForTable[counterColumn].dataType == "varchar" ? ("varchar(" + QString::number(structArrayForTable[counterColumn].characterMaximumLength) + ")") : structArrayForTable[counterColumn].dataType)
+				.arg('[' + baseName + ']')
+				.arg('[' + tableNameTemp + ']')
+				.arg('[' + structArrayForTable[counterColumn].ColumnName + ']')
+				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
 				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
 				if (createTableAndColumnInNewDb.lastError().isValid())
 				{
-					std::cout << "Error in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+					std::cout << "\nError in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
 					structArrayForTable.clear();
 					return;
 				}
@@ -522,7 +523,7 @@ void createView(QString baseName)
 			pairArrayForView.push_back(qMakePair(readViewQuery.value(0).toString(), readViewQuery.value(1).toString()));
 		} while (readViewQuery.next());
 	}
-	
+
 	for (int valueCounter = 0; valueCounter < pairArrayForView.length(); valueCounter++)
 	{
 		queryViewString = QString("%1")
@@ -530,7 +531,7 @@ void createView(QString baseName)
 
 		if (!createViewQuery.exec(queryViewString))
 		{
-			std::cout << "Error in createView when try to create view: " << pairArrayForView[valueCounter].first.toStdString() << "\n" << createViewQuery.lastError().text().toStdString() << std::endl;
+			std::cout << "Error in createView when try to create view: " << pairArrayForView[valueCounter].first.toStdString() << "\n" << createViewQuery.lastError().text().toStdString() << "\n" << createViewQuery.lastQuery().toStdString() << std::endl;
 			return;
 		}
 		else
@@ -555,7 +556,7 @@ void createView(QString baseName)
 
 void createLogin()
 {
-	QSqlQuery genQuery(masterDb);
+	QSqlQuery genQuery(mainDb);
 
 	QStringList createScripts;
 
@@ -563,7 +564,7 @@ void createLogin()
     SELECT 'CREATE LOGIN [' + name + '] WITH PASSWORD = ' + 
        CONVERT(varchar(256), password_hash, 1) + ' HASHED, ' + ' CHECK_POLICY = OFF, ' +
        CASE WHEN default_database_name IS NOT NULL 
-            THEN ' DEFAULT_DATABASE=[' + default_database_name + ']'
+            THEN ' DEFAULT_DATABASE=[' + default_database_name + '_doppelganger' + ']'
             ELSE '' END
 FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND default_database_name != 'master' AND default_database_name = '%1')").arg(mainDbName);
 
@@ -591,7 +592,7 @@ FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND defa
 		} while (genQuery.next());
 	}
 
-	QSqlQuery applyQuery(doppelDb);
+	QSqlQuery applyQuery(masterDb);
 
 	for (const QString& script : createScripts)
 	{
@@ -805,4 +806,38 @@ void dropRole()
 				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
 		} while (getQuery.next());
 	}
+}
+
+
+
+QString validateTypeOfColumn(QString any, QString maxLength)
+{
+	QString returnString = "";
+
+	if (any == "varchar" || any == "nvarchar")
+	{
+		if (any == "varchar")
+		{
+			returnString += "varchar(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
+
+		if (any == "nvarchar")
+		{
+			returnString += "nvarchar(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
+	}
+	else
+		returnString = any;
+
+	return returnString;
 }
