@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
 	{
 		if (getTablesArray())
 		{
-			qDebug() << "Trying connecting to master DataBase\n";
+			qDebug() << "Trying connecting to master DataBase (Local master)\n";
 
 			if (connectDataBase(masterDb, 1, 0))
 			{
@@ -556,6 +556,8 @@ void createView(QString baseName)
 
 void createLogin()
 {
+	// Формируем SQL запрос за добавление в сервер рецепиент логинов от донорской БД (Учетной записи требуется уровень роли сервера не меньше сисадмин. хотя бы на вермя переноса)
+
 	QSqlQuery genQuery(mainDb);
 
 	QStringList createScripts;
@@ -570,7 +572,10 @@ FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND defa
 
 	if (!genQuery.exec(tempQuery) || !genQuery.next())
 	{
-		std::cout << "Error in createRole when try to get all script: " << genQuery.lastError().text().toStdString() << genQuery.lastQuery().toStdString() << "\n\n" << std::endl;
+		if (genQuery.lastError().isValid())
+			std::cout << "Error in createRole when try to get all script: " << genQuery.lastError().text().toStdString() << genQuery.lastQuery().toStdString() << "\n\n" << std::endl;
+		else
+			qDebug() << "Unknown error. Try to check your params";
 	}
 	else
 	{
@@ -611,6 +616,8 @@ FROM sys.sql_logins WHERE name NOT like '%_doppelganger' and type = 'S' AND defa
 
 bool createUser()
 {
+	// создаём пользователей и связываем их с логинами сервера которые были созданы ранее
+
 	QSqlQuery getQuery(mainDb);
 	QSqlQuery createQuery(masterDb);
 
@@ -618,8 +625,8 @@ bool createUser()
 
 	if (!getQuery.exec(tempQueryString) || !getQuery.next())
 	{
-		qDebug() << getQuery.lastQuery();
 		std::cout << "Error in createUser when try to get all login not master " + getQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << getQuery.lastQuery();
 	}
 	else
 	{
