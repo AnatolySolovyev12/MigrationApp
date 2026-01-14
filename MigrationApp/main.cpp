@@ -49,7 +49,7 @@ QString validateHost();
 QString validateBaseLoginPass(int number);
 void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
 QString validateTypeOfColumn(QString any, QString maxLength);
-void addValueInNewDb(TableColumnStruct any);
+void addValueInNewDb(TableColumnStruct any, QString table);
 
 
 QList<QString>stringTablesArray;
@@ -373,8 +373,6 @@ SELECT *
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
 	structArrayForTable.clear();
-
-
 }
 
 
@@ -855,12 +853,50 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-void addValueInNewDb(TableColumnStruct any)
+void addValueInNewDb(TableColumnStruct any, QString table)
 {
 	QSqlQuery selectQuery(mainDb);
+	QSqlQuery insertQuery(doppelDb);
 
+	QString queryInsertString = QString("INSERT INTO %1(").arg(table);
 
-	structArrayForTable[0].ColumnName;
+	for (auto& val : structArrayForTable)
+	{
+		queryInsertString += val.ColumnName + ',';
+	}
 
+	queryInsertString.chop(1);
+
+	queryInsertString += "VALUES(";
+
+	QString querySelectString = QString("SELECT * FROM %1").arg(table);
+
+	if (!selectQuery.exec(querySelectString) || selectQuery.next())
+	{
+		std::cout << "Error in addValueInNewDb when try to get values from table " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << selectQuery.lastQuery();
+	}
+	else
+	{
+		do {
+
+			for (int counter = 0; counter <= structArrayForTable.length(); counter++)
+			{
+				queryInsertString += selectQuery.value(counter).toString() + ',';
+			}
+
+			queryInsertString.chop(1);
+			queryInsertString += ')';
+
+			if (!insertQuery.exec(queryInsertString))
+			{
+				std::cout << "Error in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << insertQuery.lastQuery();
+			}
+			else
+				qDebug() << "Values was added into " + table;
+
+		} while (selectQuery.next());
+	}
 
 }
