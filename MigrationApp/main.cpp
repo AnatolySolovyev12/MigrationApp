@@ -49,7 +49,7 @@ QString validateHost();
 QString validateBaseLoginPass(int number);
 void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
 QString validateTypeOfColumn(QString any, QString maxLength);
-void addValueInNewDb(TableColumnStruct any, QString table);
+void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress);
 
 
 QList<QString>stringTablesArray;
@@ -68,7 +68,7 @@ bool checkDuplicateTableBool = false;
 bool createFromCopy = false;
 bool CopyWithData = false;
 
-
+int testCounter;
 
 QList<TableColumnStruct>structArrayForTable;
 
@@ -105,6 +105,7 @@ int main(int argc, char* argv[])
 
 					if (createUser())
 					{
+						//dropDataBase(doppelDbName); ///////////////////
 						qDebug() << "Trying connecting to doppelganger DataBase\n";
 
 						if (connectDataBase(doppelDb, 0, 1))
@@ -372,6 +373,12 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
+	testCounter++;///////////////////////////////////////////////////////////////////
+
+	if (testCounter <= 7) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));////
+
+
+	//if (tableNameTemp == "AL_CATEGORY") addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));/////////////////////////////////////////////////
 	structArrayForTable.clear();
 }
 
@@ -853,50 +860,97 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-void addValueInNewDb(TableColumnStruct any, QString table)
+void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress)
 {
 	QSqlQuery selectQuery(mainDb);
-	QSqlQuery insertQuery(doppelDb);
+	QSqlQuery insertQuery(masterDb);
 
-	QString queryInsertString = QString("INSERT INTO %1(").arg(table);
+	QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
+		.arg(mainDbName)
+		.arg(table);
 
-	for (auto& val : structArrayForTable)
+	if(!insertQuery.exec(identityInsertString))
+	{
+		std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << selectQuery.lastQuery();
+		return;
+	}
+
+
+	QString queryInsertString = QString("INSERT INTO [%1].[dbo].[%2](")
+		.arg(doppelDbName)
+		.arg(table);
+
+	for (auto& val : any)
 	{
 		queryInsertString += val.ColumnName + ',';
 	}
 
 	queryInsertString.chop(1);
 
-	queryInsertString += "VALUES(";
+	queryInsertString += ") VALUES(";
 
-	QString querySelectString = QString("SELECT * FROM %1").arg(table);
+	QString querySelectString = QString("SELECT * FROM [%1].[dbo].[%2]")
+		.arg(mainDbName)
+		.arg(table);
 
-	if (!selectQuery.exec(querySelectString) || selectQuery.next())
+	if (!selectQuery.exec(querySelectString))
 	{
-		std::cout << "Error in addValueInNewDb when try to get values from table " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+		std::cout << "\nError in addValueInNewDb when try to get values from table " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
 		qDebug() << selectQuery.lastQuery();
+		return;
+	}
+
+	selectQuery.next();
+
+	if (!selectQuery.isValid())
+	{
+		qDebug() << " - Read values is done but table is empty";
+		return;
 	}
 	else
 	{
-		do {
+		selectQuery.last();
+		long long countOfRowInQuery = selectQuery.at();
+		selectQuery.first();
 
-			for (int counter = 0; counter <= structArrayForTable.length(); counter++)
+		do {
+			QString temporaryInsertForSingleString = queryInsertString;
+
+			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				queryInsertString += selectQuery.value(counter).toString() + ',';
+				if (structArrayForTable[counter].dataType == "varchar" || structArrayForTable[counter].dataType == "nvarchar" || structArrayForTable[counter].dataType == "datetime")
+					temporaryInsertForSingleString += "'" + selectQuery.value(counter).toString() + "'" + ',';
+				else
+					temporaryInsertForSingleString += selectQuery.value(counter).toString() + ',';
 			}
 
-			queryInsertString.chop(1);
-			queryInsertString += ')';
+			temporaryInsertForSingleString.chop(1);
+			temporaryInsertForSingleString += ')';
 
-			if (!insertQuery.exec(queryInsertString))
+			if (!insertQuery.exec(temporaryInsertForSingleString))
 			{
-				std::cout << "Error in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << insertQuery.lastQuery();
+				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << insertQuery.lastQuery() << "\n";
 			}
 			else
-				qDebug() << "Values was added into " + table;
-
+			{
+				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
+				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
+			}
 		} while (selectQuery.next());
+
+	}
+
+	identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON")
+		.arg(mainDbName)
+		.arg(table);
+
+	if (!insertQuery.exec(identityInsertString))
+	{
+		std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << selectQuery.lastQuery();
+		return;
 	}
 
 }
