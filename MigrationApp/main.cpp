@@ -916,6 +916,21 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 		do {
 			QString temporaryInsertForSingleString = queryInsertString;
+			/*
+			// Подготовленный запрос
+			QSqlQuery query;
+			query.prepare("INSERT INTO AL_PROTOCOL (MESSAGE, SOURCE, SEVERITY) VALUES (?, ?, ?)");
+
+			// Привязка значений — Qt сам экранирует
+			QString message = "текст с 'кавычками' и \"двойными\"";
+			QString source = "ASTUE (172.22.22.4)";
+			int severity = 500;
+
+			query.addBindValue(message);  // Автоэкранирование
+			query.addBindValue(source);
+			query.addBindValue(severity);
+			query.exec();
+			*/
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
