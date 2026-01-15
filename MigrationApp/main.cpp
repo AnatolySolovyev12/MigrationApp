@@ -4,6 +4,7 @@
 #include <qsqlquery>
 #include <iostream>
 #include <QRegularExpression>
+#include <qfile.h>
 
 
 
@@ -34,6 +35,27 @@ struct TableColumnStruct
 	QString domainName = "";
 };
 
+struct ParamsForSql
+{
+	QString typeOfMainDb = "";
+	QString typeOfAuthorizationMainDb = "";
+	QString NameOfMainDb = "";
+	QString loginMainDb = "";
+	QString passMainDb = "";
+
+	QString typeOfMasterDb = "";
+	QString typeOfAuthorizationMasterDb = "";
+	QString NameOfMasterDb = "";
+	QString loginMasterDb = "";
+	QString passMasterDb = "";
+
+	QString typeOfDoppelDb = "";
+	QString typeOfAuthorizationDoppelDb = "";
+	QString NameOfDoppelDb = "";
+	QString loginDoppelDb = "";
+	QString passDoppelDb = "";
+};
+
 bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppelBool);
 bool getTablesArray();
 QString getDataBaseName(QString paramString);
@@ -50,7 +72,8 @@ QString validateBaseLoginPass(int number);
 void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection);
 QString validateTypeOfColumn(QString any, QString maxLength);
 void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress);
-
+void readDefaultConfig();
+void writeCurrent();
 
 QList<QString>stringTablesArray;
 
@@ -71,6 +94,8 @@ bool CopyWithData = false;
 int testCounter;
 
 QList<TableColumnStruct>structArrayForTable;
+
+ParamsForSql paramsDefault;
 
 
 
@@ -105,7 +130,7 @@ int main(int argc, char* argv[])
 
 					if (createUser())
 					{
-						//dropDataBase(doppelDbName); ///////////////////
+						dropDataBase(doppelDbName); ///////////////////
 						qDebug() << "Trying connecting to doppelganger DataBase\n";
 
 						if (connectDataBase(doppelDb, 0, 1))
@@ -130,7 +155,7 @@ int main(int argc, char* argv[])
 		qDebug() << "Check your setting for connect to main DataBase and try again";
 	}
 
-	//dropDataBase(doppelDbName); ///////////////////
+	dropDataBase(doppelDbName); ///////////////////
 
 	return app.exec();
 }
@@ -487,25 +512,37 @@ void dropDataBase(QString baseName)
 {
 	doppelDb.close();
 
-	if (baseName == "")
+	std::string acceptDelete;
+	std::cout << "Do you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
+
+	do {
+		std::cin >> acceptDelete;
+		if (acceptDelete == "Y" || acceptDelete == "y" || acceptDelete == "N" || acceptDelete == "n") break;
+		qDebug() << "Incorrect symbol. Try again";
+	} while (true);
+
+	if (acceptDelete == "Y" || acceptDelete == "y")
 	{
-		qDebug() << "baseName is void. Try again and check your params";
-		return;
+		if (baseName == "")
+		{
+			qDebug() << "baseName is void. Try again and check your params";
+			return;
+		}
+
+		QSqlQuery dropDataBaseQuery(masterDb);
+		QString queryString = QString("DROP DATABASE %1").arg(baseName);
+
+		dropDataBaseQuery.exec("USE master;");
+
+		if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
+			std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+
+
+		if (!dropDataBaseQuery.exec(queryString))
+			std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+		else
+			qDebug() << "DataBase " << baseName << " was deleted\n";
 	}
-
-	QSqlQuery dropDataBaseQuery(masterDb);
-	QString queryString = QString("DROP DATABASE %1").arg(baseName);
-
-	dropDataBaseQuery.exec("USE master;");
-
-	if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
-		std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
-
-
-	if (!dropDataBaseQuery.exec(queryString))
-		std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
-	else
-		qDebug() << "DataBase " << baseName << " was deleted\n";
 }
 
 
@@ -934,13 +971,26 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
+				/*
 				if (structArrayForTable[counter].dataType == "varchar" || structArrayForTable[counter].dataType == "nvarchar" || structArrayForTable[counter].dataType == "datetime")
 					temporaryInsertForSingleString += "'" + selectQuery.value(counter).toString() + "'" + ',';
 				else
 					temporaryInsertForSingleString += selectQuery.value(counter).toString() + ',';
+					*/
+
+
+				temporaryInsertForSingleString += "?, ";
 			}
 
-			temporaryInsertForSingleString.chop(1);
+			insertQuery.prepare(temporaryInsertForSingleString);
+
+				for (int counter = 0; counter < structArrayForTable.length(); counter++)
+				{
+					insertQuery.addBindValue(selectQuery.value(counter).toString());
+				}
+
+
+			temporaryInsertForSingleString.chop(2);
 			temporaryInsertForSingleString += ')';
 
 			if (!insertQuery.exec(temporaryInsertForSingleString))
@@ -968,4 +1018,153 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		return;
 	}
 
+}
+
+
+
+void readDefaultConfig()
+{
+	QFile file(QCoreApplication::applicationDirPath() + "\\config.txt");
+
+	if (!file.open(QIODevice::ReadOnly))
+	{
+		qDebug() << "Dont find config file. Add file with parameters.";
+		return;
+	}
+
+	QTextStream in(&file);
+
+	int countParam = 0;
+
+	// Считываем файл строка за строкой
+
+	while (!in.atEnd()) // метод atEnd() возвращает true, если в потоке больше нет данных для чтения
+	{
+		QString line = in.readLine(); // метод readLine() считывает одну строку из потока
+		++countParam;
+		QString temporary;
+
+		for (auto& val : line)
+		{
+			temporary += val;
+		}
+
+		switch (countParam)
+		{
+
+		case(1):
+		{
+			paramsDefault.typeOfMainDb = temporary;
+			break;
+		}
+		case(2):
+		{
+			paramsDefault.typeOfAuthorizationMainDb = temporary;
+			break;
+		}
+		case(3):
+		{
+			paramsDefault.NameOfMainDb = temporary;
+			break;
+		}
+		case(4):
+		{
+			paramsDefault.loginMainDb = temporary;
+			break;
+		}
+		case(5):
+		{
+			paramsDefault.passMainDb = temporary;
+			break;
+		}
+		case(6):
+		{
+			paramsDefault.typeOfMasterDb = temporary;
+			break;
+		}
+		case(7):
+		{
+			paramsDefault.typeOfAuthorizationMasterDb = temporary;
+			break;
+		}
+		case(8):
+		{
+			paramsDefault.NameOfMasterDb = temporary;
+			break;
+		}
+		case(9):
+		{
+			paramsDefault.loginMasterDb = temporary;
+			break;
+		}
+		case(10):
+		{
+			paramsDefault.passMasterDb = temporary;
+			break;
+		}
+		case(11):
+		{
+			paramsDefault.typeOfDoppelDb = temporary;
+			break;
+		}
+		case(12):
+		{
+			paramsDefault.typeOfAuthorizationDoppelDb = temporary;
+			break;
+		}
+		case(13):
+		{
+			paramsDefault.NameOfDoppelDb = temporary;
+			break;
+		}
+		case(14):
+		{
+			paramsDefault.loginDoppelDb = temporary;
+			break;
+		}
+		case(15):
+		{
+			paramsDefault.passDoppelDb = temporary;
+			break;
+		}
+		}
+	}
+
+	file.close();
+}
+
+void writeCurrent()
+{
+	QFile file(QCoreApplication::applicationDirPath() + "\\config.txt");
+
+	// Открываем файл в режиме "Только для записи"
+	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	{
+		QTextStream out(&file); // поток записываемых данных направляем в файл
+
+		// Для записи данных в файл используем оператор <<
+		out << paramsDefault.typeOfMainDb << Qt::endl;
+		out << paramsDefault.typeOfAuthorizationMainDb << Qt::endl;
+		out << paramsDefault.NameOfMainDb << Qt::endl;
+		out << paramsDefault.loginMainDb << Qt::endl;
+		out << paramsDefault.passMainDb << Qt::endl;
+		
+		out << paramsDefault.typeOfMasterDb << Qt::endl;
+		out << paramsDefault.typeOfAuthorizationMasterDb << Qt::endl;
+		out << paramsDefault.NameOfMasterDb << Qt::endl;
+		out << paramsDefault.loginMasterDb << Qt::endl;
+		out << paramsDefault.passMasterDb << Qt::endl;
+
+		out << paramsDefault.typeOfDoppelDb << Qt::endl;
+		out << paramsDefault.typeOfAuthorizationDoppelDb << Qt::endl;
+		out << paramsDefault.NameOfDoppelDb << Qt::endl;
+		out << paramsDefault.loginDoppelDb << Qt::endl;
+		out << paramsDefault.passDoppelDb << Qt::endl;
+	}
+	else
+	{
+		qWarning("Could not open file");
+	}
+
+	file.close();
 }
