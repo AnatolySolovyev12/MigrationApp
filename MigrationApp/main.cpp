@@ -714,7 +714,7 @@ QString validateHost()
 			std::cin >> host;
 		else
 		{
-			host = paramStringList[3 + sliderIndexForDefaultParams].toStdString();
+			host = paramStringList[2 + sliderIndexForDefaultParams].toStdString();
 			qDebug() << QString::fromStdString(host);
 		}
 
@@ -733,9 +733,6 @@ QString validateHost()
 
 	return QString::fromStdString(host);
 }
-
-
-
 
 
 
@@ -770,7 +767,7 @@ QString validateBaseLoginPass(int number)
 			std::cin >> host;
 		else
 		{
-			host = paramStringList[3 + number + sliderIndexForDefaultParams].toStdString();
+			host = paramStringList[2 + number + sliderIndexForDefaultParams].toStdString();
 			qDebug() << QString::fromStdString(host);
 		}
 
@@ -807,17 +804,18 @@ void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnect
 		if (readFromFile == "Y" || readFromFile == "y")
 		{
 			paramForConnectionFromFile = true;
-			if (nameConnection == "mainDbConn");
-			sliderIndexForDefaultParams = 0;
-			if (nameConnection == "masterConn");
-			sliderIndexForDefaultParams = 6;
-			if (nameConnection == "doppelConn");
-			sliderIndexForDefaultParams = 13;
 			readDefaultConfig();
 		}
 		else
 			paramForConnectionFromFile = false;
 	}
+
+	if (nameConnection == "mainDbConn")
+		sliderIndexForDefaultParams = 0;
+	if (nameConnection == "masterConn")
+		sliderIndexForDefaultParams = 6;
+	if (nameConnection == "doppelConn")
+		sliderIndexForDefaultParams = 12;
 
 	std::string typeOfDb;
 	std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
