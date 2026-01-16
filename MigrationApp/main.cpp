@@ -958,7 +958,7 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 }
 
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress)
 {
 	QSqlQuery selectQuery(mainDb);
@@ -967,8 +967,11 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	if (!selectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !selectQuery.next())
 	{
-		std::cout << "Error in addValueInNewDb when try to get all identity_columns in mainDB " + selectQuery.lastError().text().toStdString() << std::endl;
-		qDebug() << selectQuery.lastQuery();
+		if (selectQuery.lastError().isValid())
+		{
+			std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + selectQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << selectQuery.lastQuery();
+		}
 	}
 	else
 	{
@@ -982,7 +985,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			if (!insertQuery.exec(identityInsertString))
 			{
-				std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+				std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << "\n" << std::endl;
 				qDebug() << insertQuery.lastQuery();
 			}
 		}
@@ -1030,16 +1033,11 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				/*
-				if (structArrayForTable[counter].dataType == "varchar" || structArrayForTable[counter].dataType == "nvarchar" || structArrayForTable[counter].dataType == "datetime")
-					temporaryInsertForSingleString += "'" + selectQuery.value(counter).toString() + "'" + ',';
-				else
-					temporaryInsertForSingleString += selectQuery.value(counter).toString() + ',';
-					*/
-
-
 				temporaryInsertForSingleString += "?, ";
 			}
+
+			temporaryInsertForSingleString.chop(2);
+			temporaryInsertForSingleString += ')';
 
 			insertQuery.prepare(temporaryInsertForSingleString);
 
@@ -1048,13 +1046,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 				insertQuery.addBindValue(selectQuery.value(counter).toString());
 			}
 
-
-			temporaryInsertForSingleString.chop(2);
-			temporaryInsertForSingleString += ')';
-
-			qDebug() << temporaryInsertForSingleString;
-
-			if (!insertQuery.exec(temporaryInsertForSingleString))
+			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
 			{
 				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
 				qDebug() << insertQuery.lastQuery() << "\n";
