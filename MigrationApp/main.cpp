@@ -39,18 +39,21 @@ struct ParamsForSql
 {
 	QString typeOfMainDb = "";
 	QString typeOfAuthorizationMainDb = "";
+	QString hostOfMainDb = "";
 	QString NameOfMainDb = "";
 	QString loginMainDb = "";
 	QString passMainDb = "";
 
 	QString typeOfMasterDb = "";
 	QString typeOfAuthorizationMasterDb = "";
+	QString hostOfMasterDb = "";
 	QString NameOfMasterDb = "";
 	QString loginMasterDb = "";
 	QString passMasterDb = "";
 
 	QString typeOfDoppelDb = "";
 	QString typeOfAuthorizationDoppelDb = "";
+	QString hostOfDoppelDb = "";
 	QString NameOfDoppelDb = "";
 	QString loginDoppelDb = "";
 	QString passDoppelDb = "";
@@ -90,12 +93,16 @@ int counterForPercent = 1;
 bool checkDuplicateTableBool = false;
 bool createFromCopy = false;
 bool CopyWithData = false;
+bool paramForConnectionFromFile = false;
 
 int testCounter;
+int sliderIndexForDefaultParams = 0;
 
 QList<TableColumnStruct>structArrayForTable;
 
 ParamsForSql paramsDefault;
+
+QStringList paramStringList;
 
 
 
@@ -398,9 +405,9 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
-	testCounter++;///////////////////////////////////////////////////////////////////
+	//testCounter++;///////////////////////////////////////////////////////////////////
 
-	if (testCounter <= 7) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));////
+	//if (testCounter <= 7) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));////
 
 
 	//if (tableNameTemp == "AL_CATEGORY") addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));/////////////////////////////////////////////////
@@ -703,7 +710,13 @@ QString validateHost()
 	std::cout << "What host use to connect (IP,Port)" << std::endl;
 
 	do {
-		std::cin >> host;
+		if (!paramForConnectionFromFile)
+			std::cin >> host;
+		else
+		{
+			host = paramStringList[3 + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(host);
+		}
 
 		QRegularExpression strPattern(QString(R"([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\,[0-9]{2,5})"));
 
@@ -720,6 +733,9 @@ QString validateHost()
 
 	return QString::fromStdString(host);
 }
+
+
+
 
 
 
@@ -749,7 +765,14 @@ QString validateBaseLoginPass(int number)
 	}
 
 	do {
-		std::cin >> host;
+
+		if (!paramForConnectionFromFile)
+			std::cin >> host;
+		else
+		{
+			host = paramStringList[3 + number + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(host);
+		}
 
 		if (host.length() < 50)
 		{
@@ -770,13 +793,47 @@ void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnect
 {
 	// Запрашиваем и валидируем данные для пордключения к БД
 
+	if (!paramForConnectionFromFile)
+	{
+		std::string readFromFile;
+		std::cout << "Do you want to read params for connection from file? (Y/y / N/n)" << std::endl;
+
+		do {
+			std::cin >> readFromFile;
+			if (readFromFile == "Y" || readFromFile == "y" || readFromFile == "N" || readFromFile == "n") break;
+			qDebug() << "Incorrect symbol. Try again";
+		} while (true);
+
+		if (readFromFile == "Y" || readFromFile == "y")
+		{
+			paramForConnectionFromFile = true;
+			if (nameConnection == "mainDbConn");
+			sliderIndexForDefaultParams = 0;
+			if (nameConnection == "masterConn");
+			sliderIndexForDefaultParams = 6;
+			if (nameConnection == "doppelConn");
+			sliderIndexForDefaultParams = 13;
+			readDefaultConfig();
+		}
+		else
+			paramForConnectionFromFile = false;
+	}
+
 	std::string typeOfDb;
 	std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
 
 	do {
-		std::cin >> typeOfDb;
+		if (!paramForConnectionFromFile)
+			std::cin >> typeOfDb;
+		else
+		{
+			typeOfDb = paramStringList[0 + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(typeOfDb);
+		}
+
 		if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
 		qDebug() << "Incorrect symbol. Try again";
+
 	} while (true);
 
 	if (typeOfDb == "S" || typeOfDb == "s")
@@ -785,9 +842,17 @@ void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnect
 		std::cout << "What type of Authentication will use? (S/s - SQL authentication / W/w - Windows authentication)" << std::endl;
 
 		do {
-			std::cin >> typeOfAuthentication;
+			if (!paramForConnectionFromFile)
+				std::cin >> typeOfAuthentication;
+			else
+			{
+				typeOfAuthentication = paramStringList[1 + sliderIndexForDefaultParams].toStdString();
+				qDebug() << QString::fromStdString(typeOfAuthentication);
+			}
+
 			if (typeOfAuthentication == "S" || typeOfAuthentication == "s" || typeOfAuthentication == "W" || typeOfAuthentication == "w") break;
 			qDebug() << "Incorrect symbol. Try again";
+
 		} while (true);
 
 		if (typeOfAuthentication == "S" || typeOfAuthentication == "s")
@@ -906,7 +971,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		.arg(mainDbName)
 		.arg(table);
 
-	if(!insertQuery.exec(identityInsertString))
+	if (!insertQuery.exec(identityInsertString))
 	{
 		std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
 		qDebug() << selectQuery.lastQuery();
@@ -984,10 +1049,10 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			insertQuery.prepare(temporaryInsertForSingleString);
 
-				for (int counter = 0; counter < structArrayForTable.length(); counter++)
-				{
-					insertQuery.addBindValue(selectQuery.value(counter).toString());
-				}
+			for (int counter = 0; counter < structArrayForTable.length(); counter++)
+			{
+				insertQuery.addBindValue(selectQuery.value(counter).toString());
+			}
 
 
 			temporaryInsertForSingleString.chop(2);
@@ -1048,7 +1113,8 @@ void readDefaultConfig()
 		{
 			temporary += val;
 		}
-
+		qDebug() << temporary;
+		//main
 		switch (countParam)
 		{
 
@@ -1064,70 +1130,91 @@ void readDefaultConfig()
 		}
 		case(3):
 		{
-			paramsDefault.NameOfMainDb = temporary;
+			paramsDefault.hostOfMainDb = temporary;
 			break;
 		}
 		case(4):
 		{
-			paramsDefault.loginMainDb = temporary;
+			paramsDefault.NameOfMainDb = temporary;
 			break;
 		}
 		case(5):
 		{
-			paramsDefault.passMainDb = temporary;
+			paramsDefault.loginMainDb = temporary;
 			break;
 		}
 		case(6):
 		{
-			paramsDefault.typeOfMasterDb = temporary;
+			paramsDefault.passMainDb = temporary;
 			break;
 		}
+
+		//master
 		case(7):
 		{
-			paramsDefault.typeOfAuthorizationMasterDb = temporary;
+			paramsDefault.typeOfMasterDb = temporary;
 			break;
 		}
 		case(8):
 		{
-			paramsDefault.NameOfMasterDb = temporary;
+			paramsDefault.typeOfAuthorizationMasterDb = temporary;
 			break;
 		}
 		case(9):
 		{
-			paramsDefault.loginMasterDb = temporary;
+			paramsDefault.hostOfMasterDb = temporary;
 			break;
 		}
 		case(10):
 		{
-			paramsDefault.passMasterDb = temporary;
+			paramsDefault.NameOfMasterDb = temporary;
 			break;
 		}
 		case(11):
 		{
-			paramsDefault.typeOfDoppelDb = temporary;
+			paramsDefault.loginMasterDb = temporary;
 			break;
 		}
 		case(12):
 		{
-			paramsDefault.typeOfAuthorizationDoppelDb = temporary;
+			paramsDefault.passMasterDb = temporary;
 			break;
 		}
+
+		// doppel
 		case(13):
 		{
-			paramsDefault.NameOfDoppelDb = temporary;
+			paramsDefault.typeOfDoppelDb = temporary;
 			break;
 		}
 		case(14):
 		{
-			paramsDefault.loginDoppelDb = temporary;
+			paramsDefault.typeOfAuthorizationDoppelDb = temporary;
 			break;
 		}
 		case(15):
+		{
+			paramsDefault.hostOfDoppelDb = temporary;
+			break;
+		}
+		case(16):
+		{
+			paramsDefault.NameOfDoppelDb = temporary;
+			break;
+		}
+		case(17):
+		{
+			paramsDefault.loginDoppelDb = temporary;
+			break;
+		}
+		case(18):
 		{
 			paramsDefault.passDoppelDb = temporary;
 			break;
 		}
 		}
+
+		paramStringList << temporary;
 	}
 
 	file.close();
@@ -1145,18 +1232,21 @@ void writeCurrent()
 		// Для записи данных в файл используем оператор <<
 		out << paramsDefault.typeOfMainDb << Qt::endl;
 		out << paramsDefault.typeOfAuthorizationMainDb << Qt::endl;
+		out << paramsDefault.hostOfMainDb << Qt::endl;
 		out << paramsDefault.NameOfMainDb << Qt::endl;
 		out << paramsDefault.loginMainDb << Qt::endl;
 		out << paramsDefault.passMainDb << Qt::endl;
-		
+
 		out << paramsDefault.typeOfMasterDb << Qt::endl;
 		out << paramsDefault.typeOfAuthorizationMasterDb << Qt::endl;
+		out << paramsDefault.hostOfMasterDb << Qt::endl;
 		out << paramsDefault.NameOfMasterDb << Qt::endl;
 		out << paramsDefault.loginMasterDb << Qt::endl;
 		out << paramsDefault.passMasterDb << Qt::endl;
 
 		out << paramsDefault.typeOfDoppelDb << Qt::endl;
 		out << paramsDefault.typeOfAuthorizationDoppelDb << Qt::endl;
+		out << paramsDefault.hostOfDoppelDb << Qt::endl;
 		out << paramsDefault.NameOfDoppelDb << Qt::endl;
 		out << paramsDefault.loginDoppelDb << Qt::endl;
 		out << paramsDefault.passDoppelDb << Qt::endl;
