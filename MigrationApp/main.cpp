@@ -1043,7 +1043,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				insertQuery.addBindValue(selectQuery.value(counter).toString());
+				insertQuery.addBindValue(selectQuery.value(counter).toString() == "NULL" ? "NULL" : selectQuery.value(counter).toString());
 			}
 
 			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
