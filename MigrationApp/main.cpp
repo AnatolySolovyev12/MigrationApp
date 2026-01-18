@@ -1043,18 +1043,24 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				insertQuery.addBindValue(selectQuery.value(counter).toString() == "NULL" ? "NULL" : selectQuery.value(counter).toString());
+				insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
 			}
 
 			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
 			{
 				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << insertQuery.lastQuery() << "\n";
 			}
 			else
 			{
 				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
+/*
+				QString tempQueryList;/////////////////////////////////////////
+				for (auto& val : insertQuery.boundValues())
+				{
+					tempQueryList += val.toString() + "   ";
+				}
+				qDebug() << tempQueryList << "\n";*/
 			}
 
 		} while (selectQuery.next());
