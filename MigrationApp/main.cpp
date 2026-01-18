@@ -406,7 +406,7 @@ SELECT *
 
 	testCounter++;///////////////////////////////////////////////////////////////////
 
-	if (testCounter <= 4) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
+	if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 
 	structArrayForTable.clear();
 }
@@ -980,7 +980,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			identityInster = true;
 
 			QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
-				.arg(mainDbName)
+				.arg(doppelDbName)
 				.arg(table);
 
 			if (!insertQuery.exec(identityInsertString))
@@ -1070,13 +1070,13 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 	if (identityInster)
 	{
 		QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON")
-			.arg(mainDbName)
+			.arg(doppelDbName)
 			.arg(table);
 
 		if (!insertQuery.exec(identityInsertString))
 		{
-			std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
-			qDebug() << selectQuery.lastQuery();
+			std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << insertQuery.lastQuery();
 		}
 	}
 }
