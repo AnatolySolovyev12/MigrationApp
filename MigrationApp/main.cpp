@@ -405,7 +405,7 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
-	testCounter++;///////////////////////////////////////////////////////////////////
+	//testCounter++;///////////////////////////////////////////////////////////////////
 
 	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
@@ -505,7 +505,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
 			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
-		qDebug() << queryString;
+		
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -1122,8 +1122,8 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 			}
 			///////////////////////////////////////////////
-			counter++;
-			if (counter == 1) break;
+			//counter++;
+			//if (counter == 1) break;
 			///////////////////////////////////////////////
 		} while (selectQuery.next());
 
@@ -1171,7 +1171,7 @@ void readDefaultConfig()
 		{
 			temporary += val;
 		}
-		qDebug() << temporary;
+		//qDebug() << temporary;
 		//main
 		switch (countParam)
 		{
