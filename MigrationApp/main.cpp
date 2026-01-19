@@ -406,8 +406,8 @@ SELECT *
 
 	testCounter++;///////////////////////////////////////////////////////////////////
 
-//	if (testCounter <= 4) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
-
+	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
+	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 	structArrayForTable.clear();
 }
 
@@ -501,9 +501,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + baseName + ']')
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
-			.arg(structArrayForTable[0].dataType)
+			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
 			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
-
+		qDebug() << queryString;
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -544,6 +544,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 void dropDataBase(QString baseName)
 {
 	doppelDb.close();
+	masterDb.close();
+	mainDb.close();
 
 	std::string acceptDelete;
 	std::cout << "\nDo you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
@@ -958,7 +960,7 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 {
 	QString returnString = "";
 
-	if (any == "varchar" || any == "nvarchar")
+	if (any == "varchar" || any == "nvarchar" || any == "char")
 	{
 		if (any == "varchar")
 		{
@@ -979,6 +981,16 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 			else
 				returnString += maxLength + ")";
 		}
+
+		if (any == "char")
+		{
+			returnString += "char(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
 	}
 	else
 		returnString = any;
@@ -993,6 +1005,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 	QSqlQuery selectQuery(mainDb);
 	QSqlQuery insertQuery(masterDb);
 	bool identityInster = false;
+	QString identityInsertString;
 
 	if (!selectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !selectQuery.next())
 	{
@@ -1008,19 +1021,21 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		{
 			identityInster = true;
 
-			QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON")
+			identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
 				.arg(doppelDbName)
 				.arg(table);
-
+			/*
 			if (!insertQuery.exec(identityInsertString))
 			{
 				std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << "\n" << std::endl;
 				qDebug() << insertQuery.lastQuery();
 			}
+			*/
 		}
 	}
 
-	QString queryInsertString = QString("INSERT INTO [%1].[dbo].[%2](")
+	QString queryInsertString = QString("%1 INSERT INTO [%2].[dbo].[%3](")
+		.arg(identityInsertString)
 		.arg(doppelDbName)
 		.arg(table);
 
@@ -1056,7 +1071,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		selectQuery.last();
 		long long countOfRowInQuery = selectQuery.at();
 		selectQuery.first();
-
+		int counter = 0; ////////////////////////////////////////////////////delete later !!
 		do {
 			QString temporaryInsertForSingleString = queryInsertString;
 
@@ -1078,20 +1093,25 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
 			{
 				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << insertQuery.lastQuery();
 			}
 			else
 			{
 				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 				/*
+				qDebug() << insertQuery.lastQuery();
+				
 								QString tempQueryList;/////////////////////////////////////////
 								for (auto& val : insertQuery.boundValues())
 								{
 									tempQueryList += val.toString() + "   ";
 								}
-								qDebug() << tempQueryList << "\n";*/
+								qDebug() << tempQueryList << "\n";
+								*/
 			}
-
+			counter++;
+			if (counter == 1) break;
 		} while (selectQuery.next());
 
 	}
