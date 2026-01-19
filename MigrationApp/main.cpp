@@ -406,7 +406,7 @@ SELECT *
 
 	testCounter++;///////////////////////////////////////////////////////////////////
 
-	//if (testCounter <= 1) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
+	if (testCounter <= 4) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 
 	structArrayForTable.clear();
 }
@@ -504,8 +504,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg(structArrayForTable[0].dataType)
 			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
 
-		/*if (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString())*/ qDebug() << "\n" << queryString << "\n";
-
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -528,8 +526,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
 				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[counterColumn].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
 
-			/*if (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString())*/ qDebug() << "\n" << queryString << "\n";
-
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
 				if (createTableAndColumnInNewDb.lastError().isValid())
@@ -550,7 +546,7 @@ void dropDataBase(QString baseName)
 	doppelDb.close();
 
 	std::string acceptDelete;
-	std::cout << "Do you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
+	std::cout << "\nDo you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
 
 	do {
 		std::cin >> acceptDelete;
@@ -1012,13 +1008,13 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		{
 			identityInster = true;
 
-			QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
+			QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON")
 				.arg(doppelDbName)
 				.arg(table);
 
 			if (!insertQuery.exec(identityInsertString))
 			{
-				std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << "\n" << std::endl;
+				std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << "\n" << std::endl;
 				qDebug() << insertQuery.lastQuery();
 			}
 		}
@@ -1102,13 +1098,13 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	if (identityInster)
 	{
-		QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON")
+		QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
 			.arg(doppelDbName)
 			.arg(table);
 
 		if (!insertQuery.exec(identityInsertString))
 		{
-			std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+			std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
 			qDebug() << insertQuery.lastQuery();
 		}
 	}
