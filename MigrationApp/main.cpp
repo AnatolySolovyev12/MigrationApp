@@ -103,7 +103,7 @@ QList<TableColumnStruct>structArrayForTable;
 ParamsForSql paramsDefault;
 
 QStringList paramStringList;
-
+QStringList checkSpecialTypeArray;
 
 
 int main(int argc, char* argv[])
@@ -387,6 +387,7 @@ SELECT *
 			tempStruct.domainName = createTableAndColumn.value(22).toString();
 
 			structArrayForTable.push_back(tempStruct);
+			checkSpecialTypeArray << tempStruct.dataType;
 
 		} while (createTableAndColumn.next());
 
@@ -409,6 +410,7 @@ SELECT *
 	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 	structArrayForTable.clear();
+	checkSpecialTypeArray.clear();
 }
 
 
@@ -960,7 +962,7 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 {
 	QString returnString = "";
 
-	if (any == "varchar" || any == "nvarchar" || any == "char")
+	if (any == "varchar" || any == "nvarchar" || any == "char" || any == "varbinary")
 	{
 		if (any == "varchar")
 		{
@@ -985,6 +987,16 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 		if (any == "char")
 		{
 			returnString += "char(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
+
+		if (any == "varbinary")
+		{
+			returnString += "varbinary(";
 
 			if (maxLength == "-1")
 				returnString += "max)";
@@ -1024,13 +1036,6 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
 				.arg(doppelDbName)
 				.arg(table);
-			/*
-			if (!insertQuery.exec(identityInsertString))
-			{
-				std::cout << "\nError in addValueInNewDb when try identity insert on " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << "\n" << std::endl;
-				qDebug() << insertQuery.lastQuery();
-			}
-			*/
 		}
 	}
 
@@ -1087,31 +1092,39 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
+				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image"))
+				{
+					insertQuery.addBindValue(selectQuery.value(counter).toByteArray(), QSql::In | QSql::Binary);
+				}
+				else
+					insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
 			}
 
 			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
 			{
 				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
 				qDebug() << insertQuery.lastQuery();
+
+				///////////////////////////////////////////
+				QString tempQueryList;
+
+				for (auto& val : insertQuery.boundValues())
+				{
+					tempQueryList += val.toString() + "   ";
+				}
+
+				qDebug() << tempQueryList << "\n";
+				///////////////////////////////////////////
 			}
 			else
 			{
 				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
-				/*
-				qDebug() << insertQuery.lastQuery();
-				
-								QString tempQueryList;/////////////////////////////////////////
-								for (auto& val : insertQuery.boundValues())
-								{
-									tempQueryList += val.toString() + "   ";
-								}
-								qDebug() << tempQueryList << "\n";
-								*/
 			}
+			///////////////////////////////////////////////
 			counter++;
 			if (counter == 1) break;
+			///////////////////////////////////////////////
 		} while (selectQuery.next());
 
 	}
