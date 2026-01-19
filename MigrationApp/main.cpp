@@ -406,7 +406,7 @@ SELECT *
 
 	testCounter++;///////////////////////////////////////////////////////////////////
 
-	if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
+	//if (testCounter <= 1) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 
 	structArrayForTable.clear();
 }
@@ -467,6 +467,32 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			}
 		}
 
+
+		QSqlQuery identityQueryFromMain(mainDb);
+
+		QString tempPrimaryKey = "";
+
+		// Получаем информацию на предмет наличия PRIMARY KEY
+		// sql_variant требуется преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
+
+		if (!identityQueryFromMain.exec((QString("SELECT name, CAST(seed_value AS INT) AS seed_value, CAST(increment_value AS INT) AS increment_value FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(tableNameTemp)) || !identityQueryFromMain.next())
+		{
+			if (identityQueryFromMain.lastError().isValid())
+			{
+				std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + identityQueryFromMain.lastError().text().toStdString() << std::endl;
+				qDebug() << identityQueryFromMain.lastQuery();
+			}
+		}
+		else
+		{
+			if (identityQueryFromMain.isValid())
+			{
+				tempPrimaryKey = QString("IDENTITY(%1,%2) PRIMARY KEY")
+					.arg(identityQueryFromMain.value(1).toString())
+					.arg(identityQueryFromMain.value(2).toString());
+			}
+		}
+
 		// Создаём новую таблицу в новой БД через системные таблицы
 
 		queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
@@ -474,13 +500,16 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(structArrayForTable[0].dataType)
-			.arg(structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL");
+			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+
+		/*if (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString())*/ qDebug() << "\n" << queryString << "\n";
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
 			{
 				std::cout << "Error in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				qDebug() << createTableAndColumnInNewDb.lastQuery();
 				structArrayForTable.clear();
 				return;
 			}
@@ -495,7 +524,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + structArrayForTable[counterColumn].ColumnName + ']')
 				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
-				.arg(structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL");
+				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[counterColumn].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
+
+			/*if (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString())*/ qDebug() << "\n" << queryString << "\n";
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
