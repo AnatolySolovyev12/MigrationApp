@@ -487,9 +487,11 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (identityQueryFromMain.isValid())
 			{
-				tempPrimaryKey = QString("IDENTITY(%1,%2) PRIMARY KEY")
+				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT PK_%3 PRIMARY KEY (%4)")
 					.arg(identityQueryFromMain.value(1).toString())
-					.arg(identityQueryFromMain.value(2).toString());
+					.arg(identityQueryFromMain.value(2).toString())
+					.arg(tableNameTemp)
+					.arg(structArrayForTable[0].ColumnName);
 			}
 		}
 
@@ -1085,13 +1087,13 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			{
 				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
-/*
-				QString tempQueryList;/////////////////////////////////////////
-				for (auto& val : insertQuery.boundValues())
-				{
-					tempQueryList += val.toString() + "   ";
-				}
-				qDebug() << tempQueryList << "\n";*/
+				/*
+								QString tempQueryList;/////////////////////////////////////////
+								for (auto& val : insertQuery.boundValues())
+								{
+									tempQueryList += val.toString() + "   ";
+								}
+								qDebug() << tempQueryList << "\n";*/
 			}
 
 		} while (selectQuery.next());
