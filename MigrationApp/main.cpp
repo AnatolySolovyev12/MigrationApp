@@ -406,7 +406,7 @@ SELECT *
 
 	testCounter++;///////////////////////////////////////////////////////////////////
 
-	if (testCounter <= 4) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
+//	if (testCounter <= 4) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 
 	structArrayForTable.clear();
 }
@@ -487,11 +487,11 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (identityQueryFromMain.isValid())
 			{
-				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT PK_%3 PRIMARY KEY (%4)")
+				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT PK_%3 PRIMARY KEY ([%4])")
 					.arg(identityQueryFromMain.value(1).toString())
 					.arg(identityQueryFromMain.value(2).toString())
 					.arg(tableNameTemp)
-					.arg(structArrayForTable[0].ColumnName);
+					.arg(identityQueryFromMain.value(0).toString());
 			}
 		}
 
