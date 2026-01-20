@@ -505,7 +505,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
 			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
-		
+
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -1046,14 +1046,16 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	for (auto& val : any)
 	{
-		queryInsertString += val.ColumnName + ',';
+		if (val.dataType == "timestamp")
+			continue;
+		queryInsertString += '[' + val.ColumnName + ']' + ','; // TEST
 	}
 
 	queryInsertString.chop(1);
 
 	queryInsertString += ") VALUES(";
 
-	QString querySelectString = QString("SELECT * FROM [%1].[dbo].[%2]")
+	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST
 		.arg(mainDbName)
 		.arg(table);
 
@@ -1082,6 +1084,9 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
+				if (checkSpecialTypeArray[counter].contains("timestamp"))
+					continue;
+
 				temporaryInsertForSingleString += "?, ";
 			}
 
@@ -1092,9 +1097,12 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
-				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image"))
+				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
 				{
-					insertQuery.addBindValue(selectQuery.value(counter).toByteArray(), QSql::In | QSql::Binary);
+					if (checkSpecialTypeArray[counter].contains("timestamp"))
+						continue;
+					else
+						insertQuery.addBindValue(selectQuery.value(counter).toByteArray(), QSql::In | QSql::Binary);
 				}
 				else
 					insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
@@ -1122,8 +1130,8 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 			}
 			///////////////////////////////////////////////
-			//counter++;
-			//if (counter == 1) break;
+			counter++;
+			if (counter == 1) break;
 			///////////////////////////////////////////////
 		} while (selectQuery.next());
 
