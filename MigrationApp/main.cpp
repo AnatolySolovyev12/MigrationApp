@@ -409,6 +409,7 @@ SELECT *
 
 	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
+	
 	structArrayForTable.clear();
 	checkSpecialTypeArray.clear();
 }
@@ -1017,46 +1018,14 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 {
 	QSqlQuery selectQuery(mainDb);
 	QSqlQuery insertQuery(masterDb);
+	QSqlQuery identitySelectQuery(mainDb);
+
 	bool identityInster = false;
 	QString identityInsertString;
+	
+	// Выявляем наличие данных в таблице
 
-	if (!selectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !selectQuery.next())
-	{
-		if (selectQuery.lastError().isValid())
-		{
-			std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + selectQuery.lastError().text().toStdString() << std::endl;
-			qDebug() << selectQuery.lastQuery();
-		}
-	}
-	else
-	{
-		if (selectQuery.isValid())
-		{
-			identityInster = true;
-
-			identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
-				.arg(doppelDbName)
-				.arg(table);
-		}
-	}
-
-	QString queryInsertString = QString("%1 INSERT INTO [%2].[dbo].[%3](")
-		.arg(identityInsertString)
-		.arg(doppelDbName)
-		.arg(table);
-
-	for (auto& val : any)
-	{
-		if (val.dataType == "timestamp")
-			continue;
-		queryInsertString += '[' + val.ColumnName + ']' + ','; // TEST
-	}
-
-	queryInsertString.chop(1);
-
-	queryInsertString += ") VALUES(";
-
-	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST
+	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST (убрать ТОР(1) для внесения всех значений из таблицы или только части данных
 		.arg(mainDbName)
 		.arg(table);
 
@@ -1076,11 +1045,61 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 	}
 	else
 	{
+		// Выявляем столбцы с автоинкрементом и в случае выявления позволяем писать в столбцы с данным параметром
+
+		if (!identitySelectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !identitySelectQuery.next())
+		{
+			if (identitySelectQuery.lastError().isValid())
+			{
+				std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + identitySelectQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << identitySelectQuery.lastQuery();
+			}
+		}
+		else
+		{
+			if (identitySelectQuery.isValid())
+			{
+				identityInster = true;
+
+				identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
+					.arg(doppelDbName)
+					.arg(table);
+			}
+		}
+
+		// формируем запрос на внесение значений
+
+		QString queryInsertString = QString("%1 INSERT INTO [%2].[dbo].[%3](")
+			.arg(identityInsertString)
+			.arg(doppelDbName)
+			.arg(table);
+
+		for (auto& val : any)
+		{
+			if (val.dataType == "timestamp")
+				continue;
+			queryInsertString += '[' + val.ColumnName + ']' + ','; // TEST
+		}
+
+		queryInsertString.chop(1);
+
+		queryInsertString += ") VALUES(";
+
+
+		// Определяем сколько всего записей в таблице
+
 		selectQuery.last();
 		long long countOfRowInQuery = selectQuery.at();
 		selectQuery.first();
+
 		int counter = 0; ////////////////////////////////////////////////////delete later !!
+
+		// Интегрируем данные в новую таблицу
+
 		do {
+
+			// Формируем подготовленный запрос
+
 			QString temporaryInsertForSingleString = queryInsertString;
 
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
@@ -1096,6 +1115,8 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 			insertQuery.prepare(temporaryInsertForSingleString);
 
+			// Наполняем запрос данными
+
 			for (int counter = 0; counter < structArrayForTable.length(); counter++)
 			{
 				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
@@ -1108,6 +1129,8 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 				else
 					insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
 			}
+
+			// Выполняем подготовленный запрос для внесение данных в таблицу
 
 			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
 			{
@@ -1130,19 +1153,23 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 			}
+
 			///////////////////////////////////////////////
 			counter++;
 			if (counter == 1) break;
 			///////////////////////////////////////////////
+
 		} while (selectQuery.next());
 
 	}
 
 	qDebug() << "";
 
+	// ВЫключаем возможность записи в столбцы с автоинкрементом для данной таблицы
+
 	if (identityInster)
 	{
-		QString identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
+		identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
 			.arg(doppelDbName)
 			.arg(table);
 
