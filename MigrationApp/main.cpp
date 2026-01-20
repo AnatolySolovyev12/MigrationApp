@@ -546,7 +546,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 void dropDataBase(QString baseName)
 {
 	doppelDb.close();
-	masterDb.close();
 	mainDb.close();
 
 	std::string acceptDelete;
@@ -580,6 +579,8 @@ void dropDataBase(QString baseName)
 		else
 			qDebug() << "DataBase " << baseName << " was deleted\n";
 	}
+
+	masterDb.close();
 }
 
 
@@ -1136,6 +1137,8 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		} while (selectQuery.next());
 
 	}
+
+	qDebug() << "";
 
 	if (identityInster)
 	{
