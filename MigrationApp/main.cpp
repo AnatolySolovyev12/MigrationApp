@@ -292,7 +292,8 @@ WHERE name = :tableNameCheck
 	{
 		if (createBase.lastError().isValid())
 		{
-			std::cout << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text().toStdString() << std::endl;
+			std::cout << "Error in createDoppelDbFromMain when check new DB: " << createBase.lastError().text().toStdString() << std::endl;
+			qDebug() << createBase.lastQuery();
 			return false;
 		}
 
@@ -300,10 +301,11 @@ WHERE name = :tableNameCheck
 
 		if (!createBase.exec(createDataBaseStringQuery))
 		{
-			qDebug() << "Error in createNewDbFromOther when create new DB: " << doppelDbName + " wasnt create because:" << "\n";
+			qDebug() << "Error in createDoppelDbFromMain when create new DB: " << doppelDbName + " wasnt create because:" << "\n";
 			std::cout << createBase.lastError().text().toStdString() << std::endl;
 			std::cout << createBase.lastError().databaseText().toStdString() << std::endl;
 			std::cout << createBase.lastError().driverText().toStdString() << std::endl;
+			qDebug() << createBase.lastQuery();
 
 			return false;
 		}
