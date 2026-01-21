@@ -5,6 +5,7 @@
 #include <iostream>
 #include <QRegularExpression>
 #include <qfile.h>
+#include <QTextCodec>
 
 
 
@@ -1138,12 +1139,17 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 					if (checkSpecialTypeArray[counter].contains("XML"))
 					{
 						QByteArray xmlBytes = selectQuery.value(counter).toByteArray();  // Получаем сырые байты
+
 						QString xmlString;
+
 						if (!xmlBytes.isEmpty()) {
-							// Конвертируем UTF-16LE (типично для SQL Server ODBC)
-							xmlString = QString::fromUtf16(reinterpret_cast<const ushort*>(xmlBytes.constData()), xmlBytes.size() / 2);
+							QTextCodec* codec = QTextCodec::codecForName("UTF-16LE");
+							if (codec) {
+								xmlString = codec->toUnicode(xmlBytes);
+							}
 						}
 						insertQuery.addBindValue(xmlString.isEmpty() ? QVariant(QMetaType::fromType<QString>()) : xmlString);
+						
 						continue;
 					}
 
