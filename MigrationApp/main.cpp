@@ -227,7 +227,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 		/////////////////////////////////////////////////////////////////////////////////////////////////
 		QSqlQuery testQuery(tempDbConnection);
 
-		testQuery.exec(QString("SELECT TOP(1) CAST([Definition] AS NVARCHAR(MAX)) AS Definition FROM[ProSoft_ASKUE - Utek].[dbo].[LossesParameters]"));
+		testQuery.exec(QString("SELECT TOP(1) CAST([Definition] AS NVARCHAR(MAX)) AS Definition FROM [ProSoft_ASKUE - Utek].[dbo].[LossesParameters]"));
 
 		testQuery.next();
 
