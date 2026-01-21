@@ -569,16 +569,22 @@ void dropDataBase(QString baseName)
 		}
 
 		QSqlQuery dropDataBaseQuery(masterDb);
-		QString queryString = QString("DROP DATABASE %1").arg(baseName);
+		QString queryString = QString("DROP DATABASE [%1]").arg(baseName);
 
 		dropDataBaseQuery.exec("USE master;");
 
 		if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
+		{
 			std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << dropDataBaseQuery.lastQuery();
+		}
 
 
 		if (!dropDataBaseQuery.exec(queryString))
+		{
 			std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << dropDataBaseQuery.lastQuery();
+		}
 		else
 			qDebug() << "DataBase " << baseName << " was deleted\n";
 	}
@@ -722,7 +728,7 @@ bool createUser()
 		// даём дополнительные права на выполнение DDL запросов для создания представлений и прочего
 
 		do {
-			if (!createQuery.exec(QString("USE %1 CREATE USER %2 FOR LOGIN %2 ALTER ROLE db_datareader ADD MEMBER %2 ALTER ROLE db_datawriter ADD MEMBER %2 ALTER ROLE db_ddladmin ADD MEMBER %2;")
+			if (!createQuery.exec(QString("USE [%1] CREATE USER %2 FOR LOGIN %2 ALTER ROLE db_datareader ADD MEMBER %2 ALTER ROLE db_datawriter ADD MEMBER %2 ALTER ROLE db_ddladmin ADD MEMBER %2;")
 				.arg(doppelDbName)
 				.arg(getQuery.value(0).toString())))
 			{
@@ -953,6 +959,7 @@ void dropRole()
 			if (!dropQuery.exec(QString("DROP LOGIN %1").arg(getQuery.value(0).toString())))
 			{
 				std::cout << "Error in dropRole when try delet login " << getQuery.value(0).toString().toStdString() << ": " << dropQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << getQuery.lastQuery();
 			}
 			else
 				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
@@ -966,7 +973,7 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 {
 	QString returnString = "";
 
-	if (any == "varchar" || any == "nvarchar" || any == "char" || any == "varbinary")
+	if (any == "varchar" || any == "nvarchar" || any == "char" || any == "varbinary" || any == "XML")
 	{
 		if (any == "varchar")
 		{
@@ -1006,6 +1013,11 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 				returnString += "max)";
 			else
 				returnString += maxLength + ")";
+		}
+
+		if (any == "XML")
+		{
+			returnString += "XML(.)";
 		}
 	}
 	else
