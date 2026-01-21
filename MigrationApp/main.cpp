@@ -223,7 +223,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 		qDebug() << "\nDataBase is CONNECT to " << temporaryDbName << " with connection name = " << tempDbConnection.connectionName() << '\n';
 
 		temporaryDbName = "";
-
+		/*
 		/////////////////////////////////////////////////////////////////////////////////////////////////
 		
 		QString querySelectString = QString("SELECT TOP(1) ");
@@ -250,7 +250,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 
 		return false;
 		//////////////////////////////////////////////////////////////////////////////////////////////////////
-
+		*/
 		return true;
 	}
 }
