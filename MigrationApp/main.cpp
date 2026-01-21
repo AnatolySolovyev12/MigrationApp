@@ -224,6 +224,18 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 
 		temporaryDbName = "";
 
+		/////////////////////////////////////////////////////////////////////////////////////////////////
+		QSqlQuery testQuery(tempDbConnection);
+
+		testQuery.exec(QString("SELECT TOP(1) CAST([Definition] AS NVARCHAR(MAX)) AS Definition FROM[ProSoft_ASKUE - Utek].[dbo].[LossesParameters]"));
+
+		testQuery.next();
+
+		qDebug() << testQuery.value(0).toString();
+
+		return false;
+		//////////////////////////////////////////////////////////////////////////////////////////////////////
+
 		return true;
 	}
 }
