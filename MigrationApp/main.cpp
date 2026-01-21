@@ -412,7 +412,7 @@ SELECT *
 
 	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
-	
+
 	structArrayForTable.clear();
 	checkSpecialTypeArray.clear();
 }
@@ -602,12 +602,13 @@ void createView(QString baseName)
 
 	QList<QPair<QString, QString>>pairArrayForView;
 
-	QString queryViewString = QString("SELECT TABLE_NAME, VIEW_DEFINITION FROM %1.INFORMATION_SCHEMA.VIEWS WHERE TABLE_CATALOG = '%1' AND TABLE_SCHEMA = 'dbo'")
+	QString queryViewString = QString("SELECT TABLE_NAME, VIEW_DEFINITION FROM [%1].INFORMATION_SCHEMA.VIEWS WHERE TABLE_CATALOG = '%1' AND TABLE_SCHEMA = 'dbo'")
 		.arg(baseName);
 
 	if (!readViewQuery.exec(queryViewString) || !readViewQuery.next())
 	{
 		std::cout << "Error in createView when try to get all views: " << readViewQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << readViewQuery.lastQuery();
 		return;
 	}
 	else
@@ -1037,12 +1038,41 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	bool identityInster = false;
 	QString identityInsertString;
-	
-	// Выявляем наличие данных в таблице
 
-	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST (убрать ТОР(1) для внесения всех значений из таблицы или только части данных
-		.arg(mainDbName)
-		.arg(table);
+	// Выявляем наличие данных в таблице
+	QString querySelectString;
+	bool xmlType = false;
+
+	for (auto& val : any)
+	{
+		if (val.dataType == "XML")
+			xmlType = true;
+	}
+
+	if (xmlType)
+	{
+		querySelectString = QString("SELECT TOP(1) ");
+
+		for (auto& val : any)
+		{
+			if (val.dataType == "XML")
+				querySelectString += "CAST([" + val.ColumnName + "] AS NVARCHAR(MAX)) AS " + val.ColumnName + ',';
+			else
+				querySelectString += '[' + val.ColumnName + ']' + ',';
+		}
+
+		querySelectString.chop(1);
+
+		querySelectString += QString(" FROM [%1].[dbo].[%2]")
+			.arg(mainDbName)
+			.arg(table);
+	}
+	else
+	{
+		querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST (убрать ТОР(1) для внесения всех значений из таблицы или только части данных
+			.arg(mainDbName)
+			.arg(table);
+	}
 
 	if (!selectQuery.exec(querySelectString))
 	{
@@ -1136,7 +1166,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			{
 				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
 				{
-					if (checkSpecialTypeArray[counter].contains("XML"))
+					/*if (checkSpecialTypeArray[counter].contains("XML"))
 					{
 						QByteArray xmlBytes = selectQuery.value(counter).toByteArray();  // Получаем сырые байты
 
@@ -1149,9 +1179,9 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 							}
 						}
 						insertQuery.addBindValue(xmlString.isEmpty() ? QVariant(QMetaType::fromType<QString>()) : xmlString);
-						
+
 						continue;
-					}
+					}*/
 
 					if (checkSpecialTypeArray[counter].contains("timestamp"))
 						continue;
