@@ -225,10 +225,25 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 		temporaryDbName = "";
 
 		/////////////////////////////////////////////////////////////////////////////////////////////////
+		
+		QString querySelectString = QString("SELECT TOP(1) ");
+		QString ColumnName = "Definition";
+
+				querySelectString += "CAST([" + ColumnName + "] AS NVARCHAR(MAX)) AS " + ColumnName + ',';
+
+
+		querySelectString.chop(1);
+
+		querySelectString += QString(" FROM [%1].[dbo].[%2]")
+			.arg("ProSoft_ASKUE-Utek")
+			.arg("LossesParameters");
+
+
+
 		QSqlQuery testQuery(tempDbConnection);
 
-		testQuery.exec(QString("SELECT TOP(1) CAST([Definition] AS NVARCHAR(MAX)) AS Definition FROM [ProSoft_ASKUE-Utek].[dbo].[LossesParameters]"));
-
+		//testQuery.exec(QString("SELECT TOP(1) CAST([Definition] AS NVARCHAR(MAX)) AS Definition FROM [ProSoft_ASKUE-Utek].[dbo].[LossesParameters]"));
+		testQuery.exec(querySelectString);
 		testQuery.next();
 
 		qDebug() << testQuery.value(0).toString();
@@ -1070,7 +1085,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			if (val.dataType == "XML")
 				querySelectString += "CAST([" + val.ColumnName + "] AS NVARCHAR(MAX)) AS " + val.ColumnName + ',';
 			else
-				querySelectString += '[' + val.ColumnName + ']' + ',';
+				querySelectString += '[' + val.ColumnName + "],";
 		}
 
 		querySelectString.chop(1);
