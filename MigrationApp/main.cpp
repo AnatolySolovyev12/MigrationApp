@@ -1135,6 +1135,18 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			{
 				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
 				{
+					if (checkSpecialTypeArray[counter].contains("XML"))
+					{
+						QByteArray xmlBytes = selectQuery.value(counter).toByteArray();  // Получаем сырые байты
+						QString xmlString;
+						if (!xmlBytes.isEmpty()) {
+							// Конвертируем UTF-16LE (типично для SQL Server ODBC)
+							xmlString = QString::fromUtf16(reinterpret_cast<const ushort*>(xmlBytes.constData()), xmlBytes.size() / 2);
+						}
+						insertQuery.addBindValue(xmlString.isEmpty() ? QVariant(QMetaType::fromType<QString>()) : xmlString);
+						continue;
+					}
+
 					if (checkSpecialTypeArray[counter].contains("timestamp"))
 						continue;
 					else
