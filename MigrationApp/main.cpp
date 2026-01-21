@@ -229,6 +229,203 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 
 
 
+void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection)
+{
+	// Запрашиваем и валидируем данные для пордключения к БД
+
+	if (!paramForConnectionFromFile)
+	{
+		std::string readFromFile;
+		std::cout << "Do you want to read params for connection from file? (Y/y / N/n)" << std::endl;
+
+		do {
+			std::cin >> readFromFile;
+			if (readFromFile == "Y" || readFromFile == "y" || readFromFile == "N" || readFromFile == "n") break;
+			qDebug() << "Incorrect symbol. Try again";
+		} while (true);
+
+		if (readFromFile == "Y" || readFromFile == "y")
+		{
+			paramForConnectionFromFile = true;
+			readDefaultConfig();
+		}
+		else
+			paramForConnectionFromFile = false;
+	}
+
+	if (nameConnection == "mainDbConn")
+		sliderIndexForDefaultParams = 0;
+	if (nameConnection == "masterConn")
+		sliderIndexForDefaultParams = 6;
+	if (nameConnection == "doppelConn")
+		sliderIndexForDefaultParams = 12;
+
+	std::string typeOfDb;
+	std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
+
+	do {
+		if (!paramForConnectionFromFile)
+			std::cin >> typeOfDb;
+		else
+		{
+			typeOfDb = paramStringList[0 + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(typeOfDb);
+		}
+
+		if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
+		qDebug() << "Incorrect symbol. Try again";
+
+	} while (true);
+
+	if (typeOfDb == "S" || typeOfDb == "s")
+	{
+		std::string typeOfAuthentication;
+		std::cout << "What type of Authentication will use? (S/s - SQL authentication / W/w - Windows authentication)" << std::endl;
+
+		do {
+			if (!paramForConnectionFromFile)
+				std::cin >> typeOfAuthentication;
+			else
+			{
+				typeOfAuthentication = paramStringList[1 + sliderIndexForDefaultParams].toStdString();
+				qDebug() << QString::fromStdString(typeOfAuthentication);
+			}
+
+			if (typeOfAuthentication == "S" || typeOfAuthentication == "s" || typeOfAuthentication == "W" || typeOfAuthentication == "w") break;
+			qDebug() << "Incorrect symbol. Try again";
+
+		} while (true);
+
+		if (typeOfAuthentication == "S" || typeOfAuthentication == "s")
+		{
+
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы частично работают лишь с пользовательским доменом.. 
+			tempDbConnection.setDatabaseName(
+				QString(R"(
+					DRIVER={ODBC Driver 17 for SQL Server};
+					Server=%1;
+					Database=%2;
+					Uid=%3;
+					Pwd=%4;
+)")
+.arg(validateHost())
+.arg(validateBaseLoginPass(1))
+.arg(validateBaseLoginPass(2))
+.arg(validateBaseLoginPass(3))
+
+); // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
+		}
+		else
+		{
+			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection);
+			QString connStr = QString("DRIVER={ODBC Driver 17 for SQL Server};Server=%1;DATABASE=%2;Trusted_Connection=yes;")
+				.arg(validateHost())
+				.arg(validateBaseLoginPass(1));
+			tempDbConnection.setDatabaseName(connStr);
+		}
+	}
+	else
+	{
+		/*
+mainDb = QSqlDatabase::addDatabase("QPSQL"); // Работаем используя библиотеки (PostgreSQL) и отдельные методы для подключения. Вкладываем их потом в папку с программой.
+mainDb.setHostName("192.168.56.101");
+mainDb.setDatabaseName("testdb");
+mainDb.setUserName("solovev");
+mainDb.setPassword("art54011212");
+mainDb.setPort(5432);  // По умолчанию 5432
+*/
+
+//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
+//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
+	}
+}
+
+
+
+QString validateHost()
+{
+	// Запрашиваем и валидируем хост
+
+	std::string host;
+	std::cout << "What host use to connect (IP,Port)" << std::endl;
+
+	do {
+		if (!paramForConnectionFromFile)
+			std::cin >> host;
+		else
+		{
+			host = paramStringList[2 + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(host);
+		}
+
+		QRegularExpression strPattern(QString(R"([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\,[0-9]{2,5})"));
+
+		QRegularExpressionMatch matchReg = strPattern.match(QString::fromStdString(host));
+
+		if (matchReg.hasMatch())
+		{
+			host = matchReg.captured().toStdString();
+			break;
+		}
+
+		qDebug() << "Not find in your messege host with format \"IP,Port\". Try again";
+	} while (true);
+
+	return QString::fromStdString(host);
+}
+
+
+
+QString validateBaseLoginPass(int number)
+{
+	std::string host;
+
+	switch (number)
+	{
+	case(1):
+	{
+		std::cout << "What name of DataBase?" << std::endl;
+		break;
+	}
+
+	case(2):
+	{
+		std::cout << "What login?" << std::endl;
+		break;
+	}
+
+	case(3):
+	{
+		std::cout << "What password?" << std::endl;
+		break;
+	}
+	}
+
+	do {
+
+		if (!paramForConnectionFromFile)
+			std::cin >> host;
+		else
+		{
+			host = paramStringList[2 + number + sliderIndexForDefaultParams].toStdString();
+			qDebug() << QString::fromStdString(host);
+		}
+
+		if (host.length() < 50)
+		{
+			if (number == 1)
+				temporaryDbName = QString::fromStdString(host);
+			break;
+		}
+
+		qDebug() << "Too much length of you messege. Try again;";
+	} while (true);
+
+	return QString::fromStdString(host);
+}
+
+
+
 bool getTablesArray()
 {
 	// Получаем список всех таблиц в донорской БД
@@ -274,11 +471,11 @@ QString getDataBaseName(QString paramString)
 
 bool createDoppelDbFromMain(QString tempName)
 {
-	// Создаём новую БД с изменённым именем
-
 	QSqlQuery createBase(masterDb);
 
 	doppelDbName = tempName + "_doppelganger";
+
+	// Проверяем нет ли на сервере БД с таким же именем как у создаваемой БД
 
 	createBase.prepare(R"(
 SELECT name
@@ -295,6 +492,8 @@ WHERE name = :tableNameCheck
 			std::cout << "Error in createNewDbFromOther when check new DB: " << createBase.lastError().text().toStdString() << std::endl;
 			return false;
 		}
+
+		// Создаём новую БД с изменённым именем
 
 		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(doppelDbName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
 
@@ -391,10 +590,12 @@ SELECT *
 
 		} while (createTableAndColumn.next());
 
+		// СОздаём таблицы в новой БД
+
 		createTablesInDoppelDb(baseName, tableNameTemp);
 	}
 
-	// высчитываем процент выполнения создания новых таблиц в новой БД
+	// Высчитываем процент выполнения создания новых таблиц в новой БД
 
 	counterForPercent++;
 
@@ -405,8 +606,9 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
+	// Переносим данные из донорской БД в новую
+	 
 	//testCounter++;///////////////////////////////////////////////////////////////////
-
 	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 	
@@ -544,44 +746,226 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 
 
-void dropDataBase(QString baseName)
+QString validateTypeOfColumn(QString any, QString maxLength)
 {
-	doppelDb.close();
-	mainDb.close();
+	QString returnString = "";
 
-	std::string acceptDelete;
-	std::cout << "\nDo you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
-
-	do {
-		std::cin >> acceptDelete;
-		if (acceptDelete == "Y" || acceptDelete == "y" || acceptDelete == "N" || acceptDelete == "n") break;
-		qDebug() << "Incorrect symbol. Try again";
-	} while (true);
-
-	if (acceptDelete == "Y" || acceptDelete == "y")
+	if (any == "varchar" || any == "nvarchar" || any == "char" || any == "varbinary")
 	{
-		if (baseName == "")
+		if (any == "varchar")
 		{
-			qDebug() << "baseName is void. Try again and check your params";
-			return;
+			returnString += "varchar(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
 		}
 
-		QSqlQuery dropDataBaseQuery(masterDb);
-		QString queryString = QString("DROP DATABASE %1").arg(baseName);
+		if (any == "nvarchar")
+		{
+			returnString += "nvarchar(";
 
-		dropDataBaseQuery.exec("USE master;");
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
 
-		if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
-			std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+		if (any == "char")
+		{
+			returnString += "char(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
+
+		if (any == "varbinary")
+		{
+			returnString += "varbinary(";
+
+			if (maxLength == "-1")
+				returnString += "max)";
+			else
+				returnString += maxLength + ")";
+		}
+	}
+	else
+		returnString = any;
+
+	return returnString;
+}
 
 
-		if (!dropDataBaseQuery.exec(queryString))
-			std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
-		else
-			qDebug() << "DataBase " << baseName << " was deleted\n";
+
+void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress)
+{
+	QSqlQuery selectQuery(mainDb);
+	QSqlQuery insertQuery(masterDb);
+	QSqlQuery identitySelectQuery(mainDb);
+
+	bool identityInster = false;
+	QString identityInsertString;
+
+	// Выявляем наличие данных в таблице
+
+	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST (убрать ТОР(1) для внесения всех значений из таблицы или только части данных
+		.arg(mainDbName)
+		.arg(table);
+
+	if (!selectQuery.exec(querySelectString))
+	{
+		std::cout << "\nError in addValueInNewDb when try to get values from table " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << selectQuery.lastQuery();
+		return;
 	}
 
-	masterDb.close();
+	selectQuery.next();
+	selectQuery.next();
+
+	if (!selectQuery.isValid())
+	{
+		qDebug() << " - Read values is done but table is empty";
+		return;
+	}
+	else
+	{
+		// Выявляем столбцы с автоинкрементом и в случае выявления позволяем писать в столбцы с данным параметром
+
+		if (!identitySelectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !identitySelectQuery.next())
+		{
+			if (identitySelectQuery.lastError().isValid())
+			{
+				std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + identitySelectQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << identitySelectQuery.lastQuery();
+			}
+		}
+		else
+		{
+			if (identitySelectQuery.isValid())
+			{
+				identityInster = true;
+
+				identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
+					.arg(doppelDbName)
+					.arg(table);
+			}
+		}
+
+		// формируем запрос на внесение значений
+
+		QString queryInsertString = QString("%1 INSERT INTO [%2].[dbo].[%3](")
+			.arg(identityInsertString)
+			.arg(doppelDbName)
+			.arg(table);
+
+		for (auto& val : any)
+		{
+			if (val.dataType == "timestamp")
+				continue;
+			queryInsertString += '[' + val.ColumnName + ']' + ','; // TEST
+		}
+
+		queryInsertString.chop(1);
+
+		queryInsertString += ") VALUES(";
+
+
+		// Определяем сколько всего записей в таблице
+
+		selectQuery.last();
+		long long countOfRowInQuery = selectQuery.at();
+		selectQuery.first();
+
+		int counter = 0; ////////////////////////////////////////////////////delete later !!
+
+		// Интегрируем данные в новую таблицу
+
+		do {
+
+			// Формируем подготовленный запрос
+
+			QString temporaryInsertForSingleString = queryInsertString;
+
+			for (int counter = 0; counter < structArrayForTable.length(); counter++)
+			{
+				if (checkSpecialTypeArray[counter].contains("timestamp"))
+					continue;
+
+				temporaryInsertForSingleString += "?, ";
+			}
+
+			temporaryInsertForSingleString.chop(2);
+			temporaryInsertForSingleString += ')';
+
+			insertQuery.prepare(temporaryInsertForSingleString);
+
+			// Наполняем запрос данными
+
+			for (int counter = 0; counter < structArrayForTable.length(); counter++)
+			{
+				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
+				{
+					if (checkSpecialTypeArray[counter].contains("timestamp"))
+						continue;
+					else
+						insertQuery.addBindValue(selectQuery.value(counter).toByteArray(), QSql::In | QSql::Binary);
+				}
+				else
+					insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
+			}
+
+			// Выполняем подготовленный запрос для внесение данных в таблицу
+
+			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
+			{
+				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << insertQuery.lastQuery();
+
+				///////////////////////////////////////////
+				QString tempQueryList;
+
+				for (auto& val : insertQuery.boundValues())
+				{
+					tempQueryList += val.toString() + "   ";
+				}
+
+				qDebug() << tempQueryList << "\n";
+				///////////////////////////////////////////
+			}
+			else
+			{
+				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
+				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
+			}
+
+			///////////////////////////////////////////////
+			counter++;
+			if (counter == 1) break;
+			///////////////////////////////////////////////
+
+		} while (selectQuery.next());
+
+	}
+
+	qDebug() << "";
+
+	// ВЫключаем возможность записи в столбцы с автоинкрементом для данной таблицы
+
+	if (identityInster)
+	{
+		identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
+			.arg(doppelDbName)
+			.arg(table);
+
+		if (!insertQuery.exec(identityInsertString))
+		{
+			std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << insertQuery.lastQuery();
+		}
+	}
 }
 
 
@@ -736,203 +1120,6 @@ bool createUser()
 
 
 
-QString validateHost()
-{
-	// Запрашиваем и валидируем хост
-
-	std::string host;
-	std::cout << "What host use to connect (IP,Port)" << std::endl;
-
-	do {
-		if (!paramForConnectionFromFile)
-			std::cin >> host;
-		else
-		{
-			host = paramStringList[2 + sliderIndexForDefaultParams].toStdString();
-			qDebug() << QString::fromStdString(host);
-		}
-
-		QRegularExpression strPattern(QString(R"([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\,[0-9]{2,5})"));
-
-		QRegularExpressionMatch matchReg = strPattern.match(QString::fromStdString(host));
-
-		if (matchReg.hasMatch())
-		{
-			host = matchReg.captured().toStdString();
-			break;
-		}
-
-		qDebug() << "Not find in your messege host with format \"IP,Port\". Try again";
-	} while (true);
-
-	return QString::fromStdString(host);
-}
-
-
-
-QString validateBaseLoginPass(int number)
-{
-	std::string host;
-
-	switch (number)
-	{
-	case(1):
-	{
-		std::cout << "What name of DataBase?" << std::endl;
-		break;
-	}
-
-	case(2):
-	{
-		std::cout << "What login?" << std::endl;
-		break;
-	}
-
-	case(3):
-	{
-		std::cout << "What password?" << std::endl;
-		break;
-	}
-	}
-
-	do {
-
-		if (!paramForConnectionFromFile)
-			std::cin >> host;
-		else
-		{
-			host = paramStringList[2 + number + sliderIndexForDefaultParams].toStdString();
-			qDebug() << QString::fromStdString(host);
-		}
-
-		if (host.length() < 50)
-		{
-			if (number == 1)
-				temporaryDbName = QString::fromStdString(host);
-			break;
-		}
-
-		qDebug() << "Too much length of you messege. Try again;";
-	} while (true);
-
-	return QString::fromStdString(host);
-}
-
-
-
-void addParamForDbConnection(QSqlDatabase& tempDbConnection, QString nameConnection)
-{
-	// Запрашиваем и валидируем данные для пордключения к БД
-
-	if (!paramForConnectionFromFile)
-	{
-		std::string readFromFile;
-		std::cout << "Do you want to read params for connection from file? (Y/y / N/n)" << std::endl;
-
-		do {
-			std::cin >> readFromFile;
-			if (readFromFile == "Y" || readFromFile == "y" || readFromFile == "N" || readFromFile == "n") break;
-			qDebug() << "Incorrect symbol. Try again";
-		} while (true);
-
-		if (readFromFile == "Y" || readFromFile == "y")
-		{
-			paramForConnectionFromFile = true;
-			readDefaultConfig();
-		}
-		else
-			paramForConnectionFromFile = false;
-	}
-
-	if (nameConnection == "mainDbConn")
-		sliderIndexForDefaultParams = 0;
-	if (nameConnection == "masterConn")
-		sliderIndexForDefaultParams = 6;
-	if (nameConnection == "doppelConn")
-		sliderIndexForDefaultParams = 12;
-
-	std::string typeOfDb;
-	std::cout << "What type of DataBase will connect now? (S/s - SQL Server / P/p - PostgreSQL)" << std::endl;
-
-	do {
-		if (!paramForConnectionFromFile)
-			std::cin >> typeOfDb;
-		else
-		{
-			typeOfDb = paramStringList[0 + sliderIndexForDefaultParams].toStdString();
-			qDebug() << QString::fromStdString(typeOfDb);
-		}
-
-		if (typeOfDb == "S" || typeOfDb == "s" || typeOfDb == "P" || typeOfDb == "p") break;
-		qDebug() << "Incorrect symbol. Try again";
-
-	} while (true);
-
-	if (typeOfDb == "S" || typeOfDb == "s")
-	{
-		std::string typeOfAuthentication;
-		std::cout << "What type of Authentication will use? (S/s - SQL authentication / W/w - Windows authentication)" << std::endl;
-
-		do {
-			if (!paramForConnectionFromFile)
-				std::cin >> typeOfAuthentication;
-			else
-			{
-				typeOfAuthentication = paramStringList[1 + sliderIndexForDefaultParams].toStdString();
-				qDebug() << QString::fromStdString(typeOfAuthentication);
-			}
-
-			if (typeOfAuthentication == "S" || typeOfAuthentication == "s" || typeOfAuthentication == "W" || typeOfAuthentication == "w") break;
-			qDebug() << "Incorrect symbol. Try again";
-
-		} while (true);
-
-		if (typeOfAuthentication == "S" || typeOfAuthentication == "s")
-		{
-
-			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection); // Работаем используя QODBC (SQL Server) и отдельную строку. Методы частично работают лишь с пользовательским доменом.. 
-			tempDbConnection.setDatabaseName(
-				QString(R"(
-					DRIVER={ODBC Driver 17 for SQL Server};
-					Server=%1;
-					Database=%2;
-					Uid=%3;
-					Pwd=%4;
-)")
-.arg(validateHost())
-.arg(validateBaseLoginPass(1))
-.arg(validateBaseLoginPass(2))
-.arg(validateBaseLoginPass(3))
-
-); // "DRIVER={SQL Server};" - алтернативный вариант написания c помощью старого драйвера (не рекомендуется)
-		}
-		else
-		{
-			tempDbConnection = QSqlDatabase::addDatabase("QODBC", nameConnection);
-			QString connStr = QString("DRIVER={ODBC Driver 17 for SQL Server};Server=%1;DATABASE=%2;Trusted_Connection=yes;")
-				.arg(validateHost())
-				.arg(validateBaseLoginPass(1));
-			tempDbConnection.setDatabaseName(connStr);
-		}
-	}
-	else
-	{
-		/*
-mainDb = QSqlDatabase::addDatabase("QPSQL"); // Работаем используя библиотеки (PostgreSQL) и отдельные методы для подключения. Вкладываем их потом в папку с программой.
-mainDb.setHostName("192.168.56.101");
-mainDb.setDatabaseName("testdb");
-mainDb.setUserName("solovev");
-mainDb.setPassword("art54011212");
-mainDb.setPort(5432);  // По умолчанию 5432
-*/
-
-//QSqlDatabase mainDb = QSqlDatabase::addDatabase("QODBC"); //  Работаем через QODBC в таком варианте для подключения напрямую к PostgreSQL (работает без отдельных библиотек)
-//mainDb.setDatabaseName("DRIVER={PostgreSQL ANSI};SERVER=192.168.56.101;PORT=5432;DATABASE=testdb;UID=solovev;PWD=art54011212");
-	}
-}
-
-
-
 void dropRole()
 {
 	QSqlQuery getQuery(masterDb);
@@ -955,229 +1142,6 @@ void dropRole()
 			else
 				qDebug() << "Login " << getQuery.value(0).toString() << " was drop from master base\n";
 		} while (getQuery.next());
-	}
-}
-
-
-
-QString validateTypeOfColumn(QString any, QString maxLength)
-{
-	QString returnString = "";
-
-	if (any == "varchar" || any == "nvarchar" || any == "char" || any == "varbinary")
-	{
-		if (any == "varchar")
-		{
-			returnString += "varchar(";
-
-			if (maxLength == "-1")
-				returnString += "max)";
-			else
-				returnString += maxLength + ")";
-		}
-
-		if (any == "nvarchar")
-		{
-			returnString += "nvarchar(";
-
-			if (maxLength == "-1")
-				returnString += "max)";
-			else
-				returnString += maxLength + ")";
-		}
-
-		if (any == "char")
-		{
-			returnString += "char(";
-
-			if (maxLength == "-1")
-				returnString += "max)";
-			else
-				returnString += maxLength + ")";
-		}
-
-		if (any == "varbinary")
-		{
-			returnString += "varbinary(";
-
-			if (maxLength == "-1")
-				returnString += "max)";
-			else
-				returnString += maxLength + ")";
-		}
-	}
-	else
-		returnString = any;
-
-	return returnString;
-}
-
-
-
-void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress)
-{
-	QSqlQuery selectQuery(mainDb);
-	QSqlQuery insertQuery(masterDb);
-	QSqlQuery identitySelectQuery(mainDb);
-
-	bool identityInster = false;
-	QString identityInsertString;
-	
-	// Выявляем наличие данных в таблице
-
-	QString querySelectString = QString("SELECT TOP(1) * FROM [%1].[dbo].[%2]") // TEST (убрать ТОР(1) для внесения всех значений из таблицы или только части данных
-		.arg(mainDbName)
-		.arg(table);
-
-	if (!selectQuery.exec(querySelectString))
-	{
-		std::cout << "\nError in addValueInNewDb when try to get values from table " + table.toStdString() + ". " << selectQuery.lastError().text().toStdString() << std::endl;
-		qDebug() << selectQuery.lastQuery();
-		return;
-	}
-
-	selectQuery.next();
-
-	if (!selectQuery.isValid())
-	{
-		qDebug() << " - Read values is done but table is empty";
-		return;
-	}
-	else
-	{
-		// Выявляем столбцы с автоинкрементом и в случае выявления позволяем писать в столбцы с данным параметром
-
-		if (!identitySelectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !identitySelectQuery.next())
-		{
-			if (identitySelectQuery.lastError().isValid())
-			{
-				std::cout << "\nError in addValueInNewDb when try to get all identity_columns in mainDB " + identitySelectQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << identitySelectQuery.lastQuery();
-			}
-		}
-		else
-		{
-			if (identitySelectQuery.isValid())
-			{
-				identityInster = true;
-
-				identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] ON;")
-					.arg(doppelDbName)
-					.arg(table);
-			}
-		}
-
-		// формируем запрос на внесение значений
-
-		QString queryInsertString = QString("%1 INSERT INTO [%2].[dbo].[%3](")
-			.arg(identityInsertString)
-			.arg(doppelDbName)
-			.arg(table);
-
-		for (auto& val : any)
-		{
-			if (val.dataType == "timestamp")
-				continue;
-			queryInsertString += '[' + val.ColumnName + ']' + ','; // TEST
-		}
-
-		queryInsertString.chop(1);
-
-		queryInsertString += ") VALUES(";
-
-
-		// Определяем сколько всего записей в таблице
-
-		selectQuery.last();
-		long long countOfRowInQuery = selectQuery.at();
-		selectQuery.first();
-
-		int counter = 0; ////////////////////////////////////////////////////delete later !!
-
-		// Интегрируем данные в новую таблицу
-
-		do {
-
-			// Формируем подготовленный запрос
-
-			QString temporaryInsertForSingleString = queryInsertString;
-
-			for (int counter = 0; counter < structArrayForTable.length(); counter++)
-			{
-				if (checkSpecialTypeArray[counter].contains("timestamp"))
-					continue;
-
-				temporaryInsertForSingleString += "?, ";
-			}
-
-			temporaryInsertForSingleString.chop(2);
-			temporaryInsertForSingleString += ')';
-
-			insertQuery.prepare(temporaryInsertForSingleString);
-
-			// Наполняем запрос данными
-
-			for (int counter = 0; counter < structArrayForTable.length(); counter++)
-			{
-				if (checkSpecialTypeArray[counter].contains("varbinary") || checkSpecialTypeArray[counter].contains("blob") || checkSpecialTypeArray[counter].contains("binary") || checkSpecialTypeArray[counter].contains("image") || checkSpecialTypeArray[counter].contains("timestamp"))
-				{
-					if (checkSpecialTypeArray[counter].contains("timestamp"))
-						continue;
-					else
-						insertQuery.addBindValue(selectQuery.value(counter).toByteArray(), QSql::In | QSql::Binary);
-				}
-				else
-					insertQuery.addBindValue(selectQuery.value(counter).isNull() ? QVariant(QMetaType::fromType<QString>()) : selectQuery.value(counter).toString());
-			}
-
-			// Выполняем подготовленный запрос для внесение данных в таблицу
-
-			if (!insertQuery.exec()) // подготовленный запрос выполняется без передачи строки в exec()
-			{
-				std::cout << "\n\nError in addValueInNewDb when try to insert values in table " + doppelDbName.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << insertQuery.lastQuery();
-
-				///////////////////////////////////////////
-				QString tempQueryList;
-
-				for (auto& val : insertQuery.boundValues())
-				{
-					tempQueryList += val.toString() + "   ";
-				}
-
-				qDebug() << tempQueryList << "\n";
-				///////////////////////////////////////////
-			}
-			else
-			{
-				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
-				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
-			}
-
-			///////////////////////////////////////////////
-			counter++;
-			if (counter == 1) break;
-			///////////////////////////////////////////////
-
-		} while (selectQuery.next());
-
-	}
-
-	qDebug() << "";
-
-	// ВЫключаем возможность записи в столбцы с автоинкрементом для данной таблицы
-
-	if (identityInster)
-	{
-		identityInsertString = QString("SET IDENTITY_INSERT [%1].[dbo].[%2] OFF")
-			.arg(doppelDbName)
-			.arg(table);
-
-		if (!insertQuery.exec(identityInsertString))
-		{
-			std::cout << "\nError in addValueInNewDb when try identity insert off " + table.toStdString() + ". " << insertQuery.lastError().text().toStdString() << std::endl;
-			qDebug() << insertQuery.lastQuery();
-		}
 	}
 }
 
@@ -1353,4 +1317,46 @@ void writeCurrent()
 	}
 
 	file.close();
+}
+
+
+
+void dropDataBase(QString baseName)
+{
+	doppelDb.close();
+	mainDb.close();
+
+	std::string acceptDelete;
+	std::cout << "\nDo you want to delete " + baseName.toStdString() + " ? (Y/y - delete DB / N/n - not delete DB)" << std::endl;
+
+	do {
+		std::cin >> acceptDelete;
+		if (acceptDelete == "Y" || acceptDelete == "y" || acceptDelete == "N" || acceptDelete == "n") break;
+		qDebug() << "Incorrect symbol. Try again";
+	} while (true);
+
+	if (acceptDelete == "Y" || acceptDelete == "y")
+	{
+		if (baseName == "")
+		{
+			qDebug() << "baseName is void. Try again and check your params";
+			return;
+		}
+
+		QSqlQuery dropDataBaseQuery(masterDb);
+		QString queryString = QString("DROP DATABASE %1").arg(baseName);
+
+		dropDataBaseQuery.exec("USE master;");
+
+		if (!dropDataBaseQuery.exec(QString("EXEC sp_removedbreplication '%1';").arg(baseName)))
+			std::cout << "Error in dropDataBase when try close replication: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+
+
+		if (!dropDataBaseQuery.exec(queryString))
+			std::cout << "Error in dropDataBase when try delete DB: " << dropDataBaseQuery.lastError().text().toStdString() << std::endl;
+		else
+			qDebug() << "DataBase " << baseName << " was deleted\n";
+	}
+
+	masterDb.close();
 }
