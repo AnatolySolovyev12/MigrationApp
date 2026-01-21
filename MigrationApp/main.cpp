@@ -297,7 +297,7 @@ WHERE name = :tableNameCheck
 			return false;
 		}
 
-		QString createDataBaseStringQuery = QString("CREATE DATABASE %1").arg(doppelDbName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
+		QString createDataBaseStringQuery = QString("CREATE DATABASE [%1]").arg(doppelDbName); // создание БД нельзя в SQL Server провести с использованием placeholders. Подготовленные запросы не пройдут.
 
 		if (!createBase.exec(createDataBaseStringQuery))
 		{
