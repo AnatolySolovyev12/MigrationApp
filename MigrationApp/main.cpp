@@ -435,9 +435,6 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
-	//testCounter++;///////////////////////////////////////////////////////////////////
-
-	//if (testCounter <= 10) addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));//////////////////
 	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 
 	structArrayForTable.clear();
@@ -635,8 +632,7 @@ void createView(QString baseName)
 	if (!readViewQuery.exec(queryViewString) || !readViewQuery.next())
 	{
 		std::cout << "Error in createView when try to get all views: " << readViewQuery.lastError().text().toStdString() << std::endl;
-		qDebug() << readViewQuery.lastQuery();
-		return;
+		qDebug() << readViewQuery.lastQuery() << "\n";
 	}
 	else
 	{
@@ -654,7 +650,7 @@ void createView(QString baseName)
 		if (!createViewQuery.exec(queryViewString))
 		{
 			std::cout << "Error in createView when try to create view: " << pairArrayForView[valueCounter].first.toStdString() << "\n" << createViewQuery.lastError().text().toStdString() << "\n" << createViewQuery.lastQuery().toStdString() << std::endl;
-			return;
+			qDebug() << createViewQuery.lastQuery() << "\n";
 		}
 		else
 		{
@@ -1072,8 +1068,10 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	for (auto& val : any)
 	{
-		if (val.dataType == "XML")
+		if (val.dataType == "xml")
+		{
 			xmlType = true;
+		}
 	}
 
 	if (xmlType)
@@ -1082,7 +1080,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 		for (auto& val : any)
 		{
-			if (val.dataType == "XML")
+			if (val.dataType == "xml")
 				querySelectString += "CAST([" + val.ColumnName + "] AS NVARCHAR(MAX)) AS " + val.ColumnName + ',';
 			else
 				querySelectString += '[' + val.ColumnName + "],";
