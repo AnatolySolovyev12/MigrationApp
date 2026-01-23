@@ -225,7 +225,7 @@ bool connectDataBase(QSqlDatabase& tempDbConnection, bool masterBool, bool doppe
 		temporaryDbName = "";
 		/*
 		/////////////////////////////////////////////////////////////////////////////////////////////////
-		
+
 		QString querySelectString = QString("SELECT TOP(1) ");
 		QString ColumnName = "Definition";
 
@@ -517,10 +517,23 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (identityQueryFromMain.isValid())
 			{
-				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT PK_%3 PRIMARY KEY ([%4])")
+				QSqlQuery getPkName(mainDb);
+
+				QString tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
+					.arg(mainDbName)
+					.arg(tableNameTemp);
+
+				if (!getPkName.exec(tempFoGetPk) || !getPkName.next())
+				{
+					std::cout << "\nError in addValueInNewDb when try to get name of PK " + getPkName.lastError().text().toStdString() << std::endl;
+					qDebug() << getPkName.lastQuery();
+				}
+
+
+				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
 					.arg(identityQueryFromMain.value(1).toString())
 					.arg(identityQueryFromMain.value(2).toString())
-					.arg(tableNameTemp)
+					.arg(getPkName.value(0).toString())
 					.arg(identityQueryFromMain.value(0).toString());
 			}
 		}
