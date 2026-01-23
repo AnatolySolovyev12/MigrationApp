@@ -499,13 +499,21 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 
 		QSqlQuery identityQueryFromMain(mainDb);
-
+		QSqlQuery getPkName(mainDb);
 		QString tempPrimaryKey = "";
+		QString tempFoGetPk;
+		bool identity = false;
+		bool primary = false;
+		QString specialColuimnForCompare;
 
 		// Получаем информацию на предмет наличия PRIMARY KEY
 		// sql_variant требуется преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
 
-		if (!identityQueryFromMain.exec((QString("SELECT name, CAST(seed_value AS INT) AS seed_value, CAST(increment_value AS INT) AS increment_value FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(tableNameTemp)) || !identityQueryFromMain.next())
+		QString checkIncrementValue = QString("SELECT name, CAST(seed_value AS INT) AS seed_value, CAST(increment_value AS INT) AS increment_value FROM [%1].sys.identity_columns WHERE OBJECT_NAME(object_id) = '%2'")
+			.arg(mainDbName)
+			.arg(tableNameTemp);
+		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << checkIncrementValue;/////////////////////////////////////////////////////
+		if (!identityQueryFromMain.exec(checkIncrementValue) || !identityQueryFromMain.next())
 		{
 			if (identityQueryFromMain.lastError().isValid())
 			{
@@ -517,26 +525,68 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (identityQueryFromMain.isValid())
 			{
-				QSqlQuery getPkName(mainDb);
+				specialColuimnForCompare = identityQueryFromMain.value(0).toString();
+				identity = true;
+			}
+			else
+				identity = false;
+		}
 
-				QString tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
-					.arg(mainDbName)
-					.arg(tableNameTemp);
+		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << identityQueryFromMain.lastQuery();//////////////////////////////////////
 
-				if (!getPkName.exec(tempFoGetPk) || !getPkName.next())
-				{
-					std::cout << "\nError in addValueInNewDb when try to get name of PK " + getPkName.lastError().text().toStdString() << std::endl;
-					qDebug() << getPkName.lastQuery();
-				}
+		tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2'")
+			.arg(mainDbName)
+			.arg(tableNameTemp);
 
+		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempFoGetPk;/////////////////////////////////////////////////////
 
-				tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
-					.arg(identityQueryFromMain.value(1).toString())
-					.arg(identityQueryFromMain.value(2).toString())
-					.arg(getPkName.value(0).toString())
-					.arg(identityQueryFromMain.value(0).toString());
+		if (!getPkName.exec(tempFoGetPk) || !getPkName.next())
+		{
+			if (getPkName.lastError().isValid())
+			{
+				std::cout << "\nError in addValueInNewDb when try to get name of PK " + getPkName.lastError().text().toStdString() << std::endl;
+				qDebug() << getPkName.lastQuery();
 			}
 		}
+		else
+		{
+			if (getPkName.isValid())
+			{
+				specialColuimnForCompare = getPkName.value(0).toString();
+				primary = true;
+			}
+			else
+				primary = false;
+		}
+
+		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << getPkName.lastQuery();//////////////////////////////////////
+
+		if (primary && identity)
+		{
+			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
+				.arg(identityQueryFromMain.value(1).toString())
+				.arg(identityQueryFromMain.value(2).toString())
+				.arg(getPkName.value(1).toString())
+				.arg(identityQueryFromMain.value(0).toString());
+			//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
+		}
+
+		if (!primary && identity)
+		{
+			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL")
+				.arg(identityQueryFromMain.value(1).toString())
+				.arg(identityQueryFromMain.value(2).toString());
+			//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
+		}
+
+		if (primary && !identity)
+		{
+			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
+				.arg(getPkName.value(1).toString())
+				.arg(structArrayForTable[0].ColumnName);
+		//	if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
+		}
+
 
 		// Создаём новую таблицу в новой БД через системные таблицы
 
@@ -545,7 +595,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
-			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() || structArrayForTable[0].ColumnName == getPkName.value(0).toString()) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+		
+		if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << queryString;//////////////////////////////////////
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
@@ -579,6 +631,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				}
 			}
 		}
+
+		identityQueryFromMain.clear();
 	}
 }
 
