@@ -504,7 +504,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		QString tempFoGetPk;
 		bool identity = false;
 		bool primary = false;
-		QString specialColuimnForCompare;
+		QString specialColuimnForCompareIdentity;
+		QString specialColuimnForComparePK;
 
 		// ѕолучаем информацию на предмет наличи€ PRIMARY KEY
 		// sql_variant требуетс€ преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
@@ -525,7 +526,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (identityQueryFromMain.isValid())
 			{
-				specialColuimnForCompare = identityQueryFromMain.value(0).toString();
+				specialColuimnForCompareIdentity = identityQueryFromMain.value(0).toString();
 				identity = true;
 			}
 			else
@@ -533,8 +534,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 
 		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << identityQueryFromMain.lastQuery();//////////////////////////////////////
+		tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
 
-		tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2'")
+		//tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2'")
 			.arg(mainDbName)
 			.arg(tableNameTemp);
 
@@ -552,7 +554,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (getPkName.isValid())
 			{
-				specialColuimnForCompare = getPkName.value(0).toString();
+				specialColuimnForComparePK = getPkName.value(0).toString();
 				primary = true;
 			}
 			else
@@ -566,7 +568,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
 				.arg(identityQueryFromMain.value(1).toString())
 				.arg(identityQueryFromMain.value(2).toString())
-				.arg(getPkName.value(1).toString())
+				.arg(getPkName.value(0).toString())
 				.arg(identityQueryFromMain.value(0).toString());
 			//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
 		}
@@ -582,7 +584,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		if (primary && !identity)
 		{
 			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
-				.arg(getPkName.value(1).toString())
+				.arg(getPkName.value(0).toString())
 				.arg(structArrayForTable[0].ColumnName);
 		//	if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
 		}
@@ -595,9 +597,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
-			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == identityQueryFromMain.value(0).toString() || structArrayForTable[0].ColumnName == getPkName.value(0).toString()) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == specialColuimnForComparePK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
 		
-		if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << queryString;//////////////////////////////////////
+		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << queryString;//////////////////////////////////////
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
@@ -619,7 +621,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + structArrayForTable[counterColumn].ColumnName + ']')
 				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
-				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : (structArrayForTable[counterColumn].ColumnName == identityQueryFromMain.value(0).toString() ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
+				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[counterColumn].ColumnName == specialColuimnForComparePK || structArrayForTable[counterColumn].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
