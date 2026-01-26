@@ -506,6 +506,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		bool primary = false;
 		QString specialColuimnForCompareIdentity;
 		QString specialColuimnForComparePK;
+		QString nameColumnForPK;
 
 		// Получаем информацию на предмет наличия PRIMARY KEY
 		// sql_variant требуется преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
@@ -555,6 +556,24 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			if (getPkName.isValid())
 			{
 				specialColuimnForComparePK = getPkName.value(0).toString();
+
+				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2'")
+				.arg(mainDbName)
+			    .arg(tableNameTemp);
+
+				if (!getPkName.exec(tempFoGetPk) || !getPkName.next())
+				{
+					if (getPkName.lastError().isValid())
+					{
+						std::cout << "\nError in addValueInNewDb when try to get count of PK and name of column" + getPkName.lastError().text().toStdString() << std::endl;
+						qDebug() << getPkName.lastQuery();
+					}
+				}
+				else
+				{
+					nameColumnForPK = getPkName.value(0).toString();
+				}
+
 				primary = true;
 			}
 			else
@@ -568,7 +587,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
 				.arg(identityQueryFromMain.value(1).toString())
 				.arg(identityQueryFromMain.value(2).toString())
-				.arg(getPkName.value(0).toString())
+				.arg(specialColuimnForComparePK)
 				.arg(identityQueryFromMain.value(0).toString());
 			//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
 		}
@@ -584,7 +603,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		if (primary && !identity)
 		{
 			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
-				.arg(getPkName.value(0).toString())
+				.arg(specialColuimnForComparePK)
 				.arg(structArrayForTable[0].ColumnName);
 		//	if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << tempPrimaryKey;//////////////////////////////////////
 		}
@@ -597,9 +616,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
-			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == specialColuimnForComparePK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == nameColumnForPK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
 		
-		//if (tableNameTemp == "AL_TAG_HISTORY") qDebug() << queryString;//////////////////////////////////////
+		if (tableNameTemp == "ADB_QUEUE_REPLACE_TAG" || tableNameTemp == "AL_CATEGORY") qDebug() << queryString;//////////////////////////////////////
 
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
@@ -1186,7 +1205,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 	{
 		// Выявляем столбцы с автоинкрементом и в случае выявления позволяем писать в столбцы с данным параметром
 
-		if (!identitySelectQuery.exec((QString("SELECT name FROM sys.identity_columns WHERE OBJECT_NAME(object_id) = '%1'")).arg(table)) || !identitySelectQuery.next())
+		if (!identitySelectQuery.exec((QString("SELECT name FROM [%1].sys.identity_columns WHERE OBJECT_NAME(object_id) = '%2'")).arg(mainDbName).arg(table)) || !identitySelectQuery.next())
 		{
 			if (identitySelectQuery.lastError().isValid())
 			{
