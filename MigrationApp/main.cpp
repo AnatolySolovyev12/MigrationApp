@@ -509,7 +509,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		QString nameColumnForPK;
 		QString manyComponentPK;
 
-		// Получаем информацию на предмет наличия PRIMARY KEY
+		// Получаем информацию на предмет наличия IDENTITY_COLUMN
 		// sql_variant требуется преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
 
 		QString checkIncrementValue = QString("SELECT name, CAST(seed_value AS INT) AS seed_value, CAST(increment_value AS INT) AS increment_value FROM [%1].sys.identity_columns WHERE OBJECT_NAME(object_id) = '%2'")
@@ -534,6 +534,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				identity = false;
 		}
 
+		// Получаем информацию на предмет наличия PRIMARY_KEY
+
 		tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
 			.arg(mainDbName)
 			.arg(tableNameTemp);
@@ -550,6 +552,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			if (getPkName.isValid())
 			{
+				// Определяем является ли PK многосоставным и если является то формируем тело ключа
+
 				specialColuimnForComparePK = getPkName.value(0).toString();
 
 				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
@@ -580,7 +584,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 						{
 							manyComponentPK += ", [" + getPkName.value(0).toString() + ']';
 						}
-						//manyComponentPK.chop(1);
 					}
 				}
 
@@ -589,6 +592,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				primary = false;
 		}
+
+		// Определяем исход из полученных переменных характер первого столбца при создании таблицы
 
 		if (primary && identity)
 		{
@@ -656,6 +661,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			}
 		}
 
+		// Пересоздаём ключ если он был многокомпонентным предварительно его удалив, если он всё таки был создан
+		
 		if (manyComponentPK != "")
 		{
 			if (structArrayForTable[0].ColumnName == nameColumnForPK)
@@ -700,6 +707,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 void dropDataBase(QString baseName)
 {
+	// Опциональная функция удаления новосозданной БД на момент доработки приложения. В основном для того чтобы потом не удалять её вручную в дальнейшем. 
+
 	doppelDb.close();
 	mainDb.close();
 
@@ -788,7 +797,7 @@ void createView(QString baseName)
 
 			std::string tempForStdOut = QString::number(percent).toStdString() + "%   Add view " + pairArrayForView[valueCounter].first.toStdString();
 
-			std::cout << "\r\x1b[2K" << tempForStdOut << std::flush;// делаем возврат корретки в текущей строке и затираем всю строку.
+			std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 		}
 	}
 
@@ -1237,7 +1246,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 
 	if (!selectQuery.isValid())
 	{
-		qDebug() << " - Read values is done but table is empty";
+		qDebug() << " - Empty table";
 		return;
 	}
 	else
@@ -1286,7 +1295,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 		// Определяем сколько всего записей в таблице
 
 		selectQuery.last();
-		long long countOfRowInQuery = selectQuery.at();
+		long long countOfRowInQuery = selectQuery.at() + 1;
 		selectQuery.first();
 
 		int counter = 0; ////////////////////////////////////////////////////delete later !!
@@ -1364,7 +1373,7 @@ void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progre
 			}
 			else
 			{
-				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at()) + " / " + QString::number(countOfRowInQuery) + " ] ";
+				QString progressString = progress + " - Values was added into " + table + " [ " + QString::number(selectQuery.at() + 1) + " / " + QString::number(countOfRowInQuery) + " ] ";
 				std::cout << "\r\x1b[2K" << progressString.toStdString() << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 			}
 
