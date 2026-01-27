@@ -78,6 +78,8 @@ QString validateTypeOfColumn(QString any, QString maxLength);
 void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress);
 void readDefaultConfig();
 void writeCurrent();
+bool createFullBdFromCopy(QString tableNameTemp);
+void checkDuplicateTableInNewBd(QString baseName, QString tableNameTemp);
 
 QList<QString>stringTablesArray;
 
@@ -443,6 +445,67 @@ SELECT *
 
 
 
+bool createFullBdFromCopy(QString tableNameTemp)
+{
+	QSqlQuery createTableAndColumnInNewDb(masterDb);
+	QString queryString;
+
+	// Создаём новую таблицу в новой БД через копирование структуры с данными или без них
+
+	CopyWithData == true ? queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2 WHERE 1 = 0") : queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2")
+		.arg(doppelDbName)
+		.arg(tableNameTemp)
+		.arg(getDataBaseName(mainDb.databaseName()));
+
+	if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+	{
+		if (createTableAndColumnInNewDb.lastError().isValid())
+		{
+			std::cout << "\nError in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
+			structArrayForTable.clear();
+			return;
+		}
+	}
+}
+
+
+
+void checkDuplicateTableInNewBd(QString baseName, QString tableNameTemp)
+{
+	// Проверяем наличие дубликатов таблиц в новой БД
+
+	QSqlQuery createTableAndColumnInNewDb(masterDb);
+	QString queryString;
+
+	if (checkDuplicateTableBool)
+	{
+		queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
+			.arg(baseName)
+			.arg(tableNameTemp);
+
+		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
+		{
+			if (createTableAndColumnInNewDb.lastError().isValid())
+			{
+				std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
+				structArrayForTable.clear();
+				return;
+			}
+		}
+		else
+		{
+			if (createTableAndColumnInNewDb.isValid())
+			{
+				qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
+				structArrayForTable.clear();
+				return;
+			}
+		}
+	}
+}
+
+
+
 void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 {
 	QSqlQuery createTableAndColumnInNewDb(masterDb);
@@ -450,53 +513,11 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 	if (createFromCopy)
 	{
-		// Создаём новую таблицу в новой БД через копирование структуры с данными или без них
-
-		CopyWithData == true ? queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2 WHERE 1 = 0") : queryString = QString("SELECT * INTO %1.dbo.%2 FROM %3.dbo.%2")
-			.arg(doppelDbName)
-			.arg(tableNameTemp)
-			.arg(getDataBaseName(mainDb.databaseName()));
-
-		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
-		{
-			if (createTableAndColumnInNewDb.lastError().isValid())
-			{
-				std::cout << "\nError in createTablesInDoppelDb when try create new table(" << tableNameTemp.toStdString() << "): " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
-				structArrayForTable.clear();
-				return;
-			}
-		}
+		createFullBdFromCopy(tableNameTemp);
 	}
 	else
 	{
-		// Проверяем наличие дубликатов таблиц в новой БД
-
-		if (checkDuplicateTableBool)
-		{
-			queryString = QString("SELECT * FROM %1.INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '%2'")
-				.arg(baseName)
-				.arg(tableNameTemp);
-
-			if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
-			{
-				if (createTableAndColumnInNewDb.lastError().isValid())
-				{
-					std::cout << "Error in createTablesInDoppelDb when trying to find duplicate tables: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
-					structArrayForTable.clear();
-					return;
-				}
-			}
-			else
-			{
-				if (createTableAndColumnInNewDb.isValid())
-				{
-					qDebug() << "DataBase have duplicate tables (" << tableNameTemp << "). Try to check doppelganger DB" << "\n";
-					structArrayForTable.clear();
-					return;
-				}
-			}
-		}
-
+		checkDuplicateTableInNewBd(baseName, tableNameTemp);
 
 		QSqlQuery identityQueryFromMain(mainDb);
 		QSqlQuery getPkName(mainDb);
@@ -638,7 +659,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				return;
 			}
 		}
-		
+
 		// Добавляем оставшиеся столбцы в созданную таблицу
 
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
@@ -662,7 +683,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 
 		// Пересоздаём ключ если он был многокомпонентным предварительно его удалив, если он всё таки был создан
-		
+
 		if (manyComponentPK != "")
 		{
 			if (structArrayForTable[0].ColumnName == nameColumnForPK)
@@ -679,7 +700,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 						std::cout << "\nError in createTablesInDoppelDb when try drop constrait: " << createTableAndColumnInNewDb.lastError().text().toStdString() << std::endl;
 						qDebug() << createTableAndColumnInNewDb.lastQuery() << "\n";
 					}
-					
+
 				}
 			}
 
