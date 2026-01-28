@@ -78,8 +78,9 @@ QString validateTypeOfColumn(QString any, QString maxLength);
 void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress);
 void readDefaultConfig();
 void writeCurrent();
-bool createFullBdFromCopy(QString tableNameTemp);
+void createFullBdFromCopy(QString tableNameTemp);
 void checkDuplicateTableInNewBd(QString baseName, QString tableNameTemp);
+void createFK();
 
 QList<QString>stringTablesArray;
 
@@ -445,7 +446,7 @@ SELECT *
 
 
 
-bool createFullBdFromCopy(QString tableNameTemp)
+void createFullBdFromCopy(QString tableNameTemp)
 {
 	QSqlQuery createTableAndColumnInNewDb(masterDb);
 	QString queryString;
@@ -1598,3 +1599,49 @@ void writeCurrent()
 
 	file.close();
 }
+
+
+
+void createFK()
+{
+	QSqlQuery checkAndCreateFKQuery(mainDb);
+
+	QString queryString = QString("
+
+
+		SELECT TOP(1)
+		OBJECT_NAME(fcol.[constraint_object_id]) AS NAME_KEY,
+		fcol.[constraint_object_id],
+		OBJECT_NAME(fcol.[parent_object_id]) AS PARENT,
+		fcol.[parent_object_id],
+		OBJECT_NAME(fcol.[referenced_object_id]) AS REFERENCE,
+		fcol.[referenced_object_id],
+		fcol.[constraint_column_id],
+		fcol.[parent_column_id],
+		is_not_trusted,
+		fk.is_not_for_replication,
+		fk.delete_referential_action,
+		update_referential_action,
+		fk.delete_referential_action_desc
+
+		FROM[EnergyRes].[sys].[foreign_key_columns] AS fcol
+		JOIN[EnergyRes].[sys].[foreign_keys] AS fk
+		ON
+		OBJECT_NAME(fcol.[constraint_object_id]) = fk.name
+
+
+
+
+		SELECT name
+		FROM[EnergyRes].sys.columns
+		WHERE object_id = 2002106173 AND column_id = 2;
+
+
+	ALTER TABLE EnergyRes_doppelganger.dbo.AL_POROG
+		ADD CONSTRAINT FK_AlPorog_AlFormula
+		FOREIGN KEY(IDFORMULA)
+		REFERENCES EnergyRes_doppelganger.dbo.AL_FORMULA(IDFORMULA_PARENT)
+		ON DELETE CASCADE
+		--ON UPDATE NO_ACTION
+		--WITH CHECK; *
+
