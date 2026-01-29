@@ -1601,7 +1601,7 @@ void writeCurrent()
 }
 
 
-
+/*
 void createFK()
 {
 	QSqlQuery checkAndCreateFKQuery(mainDb);
@@ -1609,39 +1609,45 @@ void createFK()
 	QString queryString = QString("
 
 
-		SELECT TOP(1)
-		OBJECT_NAME(fcol.[constraint_object_id]) AS NAME_KEY,
-		fcol.[constraint_object_id],
-		OBJECT_NAME(fcol.[parent_object_id]) AS PARENT,
-		fcol.[parent_object_id],
-		OBJECT_NAME(fcol.[referenced_object_id]) AS REFERENCE,
-		fcol.[referenced_object_id],
-		fcol.[constraint_column_id],
-		fcol.[parent_column_id],
-		is_not_trusted,
-		fk.is_not_for_replication,
-		fk.delete_referential_action,
-		update_referential_action,
-		fk.delete_referential_action_desc
 
-		FROM[EnergyRes].[sys].[foreign_key_columns] AS fcol
-		JOIN[EnergyRes].[sys].[foreign_keys] AS fk
-		ON
-		OBJECT_NAME(fcol.[constraint_object_id]) = fk.name
+SELECT
+OBJECT_NAME(fk.[parent_object_id]) AS PARENT,
+OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,
+sCol.name,
+OBJECT_NAME([referenced_object_id]) AS REFER,
 
+(SELECT name
+FROM [EnergyRes].[sys].[columns]
+WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,
 
+fk.[parent_object_id],
+fk.[parent_column_id],
+fk.[referenced_object_id],
+fk.[referenced_column_id]
 
+FROM [EnergyRes].[sys].[foreign_key_columns] AS fk
 
-		SELECT name
-		FROM[EnergyRes].sys.columns
-		WHERE object_id = 2002106173 AND column_id = 2;
+JOIN [EnergyRes].[sys].[columns] AS sCol
+ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]
+
+ORDER BY PARENT
 
 
+SELECT *
+FROM [EnergyRes].[sys].[columns]
+WHERE column_id = 2 AND object_id = 2066106401
+
+
+  /*
 	ALTER TABLE EnergyRes_doppelganger.dbo.AL_POROG
 		ADD CONSTRAINT FK_AlPorog_AlFormula
 		FOREIGN KEY(IDFORMULA)
-		REFERENCES EnergyRes_doppelganger.dbo.AL_FORMULA(IDFORMULA_PARENT)
+		REFERENCES EnergyRes_doppelganger.dbo.AL_FORMULA(IDFORMULA)
+	*/
+
+
 		ON DELETE CASCADE
 		--ON UPDATE NO_ACTION
 		--WITH CHECK; *
 
+*/
