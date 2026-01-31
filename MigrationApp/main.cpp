@@ -1612,42 +1612,33 @@ void createFK()
 
 SELECT
 OBJECT_NAME(fk.[parent_object_id]) AS PARENT,
+CASE WHEN fkOpt.is_not_trusted = 1 THEN 'WITH NOCHECK' ELSE 'WITH CHECK' END AS NOT_TRUSTED_CHECK,
 OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,
 sCol.name,
-OBJECT_NAME([referenced_object_id]) AS REFER,
+OBJECT_NAME(fk.[referenced_object_id]) AS REFER,
 
 (SELECT name
 FROM [EnergyRes].[sys].[columns]
 WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,
 
-fk.[parent_object_id],
-fk.[parent_column_id],
-fk.[referenced_object_id],
-fk.[referenced_column_id]
+CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,
+CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,
+CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION
 
 FROM [EnergyRes].[sys].[foreign_key_columns] AS fk
 
 JOIN [EnergyRes].[sys].[columns] AS sCol
 ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]
 
+JOIN [EnergyRes].[sys].[foreign_keys] AS fkOpt
+ON fkOpt.name = OBJECT_NAME(fk.[constraint_object_id])
+
 ORDER BY PARENT
 
 
-SELECT *
-FROM [EnergyRes].[sys].[columns]
-WHERE column_id = 2 AND object_id = 2066106401
-
-
-  /*
-	ALTER TABLE EnergyRes_doppelganger.dbo.AL_POROG
+	ALTER TABLE EnergyRes_doppelganger.dbo.AL_POROG WITH CHECK
 		ADD CONSTRAINT FK_AlPorog_AlFormula
 		FOREIGN KEY(IDFORMULA)
 		REFERENCES EnergyRes_doppelganger.dbo.AL_FORMULA(IDFORMULA)
-	*/
-
-
 		ON DELETE CASCADE
-		--ON UPDATE NO_ACTION
-		--WITH CHECK; *
-
-*/
+		ON UPDATE NO ACTION
