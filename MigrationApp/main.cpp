@@ -1601,44 +1601,77 @@ void writeCurrent()
 }
 
 
-/*
+
 void createFK()
 {
+	// —читываем FK из mainDB
+
 	QSqlQuery checkAndCreateFKQuery(mainDb);
+	QSqlQuery writeFkQuery(masterDb);
 
-	QString queryString = QString("
+	QString queryString = QString(R"(
+		SELECT
+		OBJECT_NAME(fk.[parent_object_id]) AS PARENT,
+		CASE WHEN fkOpt.is_not_trusted = 1 THEN 'WITH NOCHECK' ELSE 'WITH CHECK' END AS NOT_TRUSTED_CHECK,
+		OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,
+		sCol.name,
+		OBJECT_NAME(fk.[referenced_object_id]) AS REFER,
 
+		(SELECT name
+			FROM [%1].[sys].[columns]
+			WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,
 
+		CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,
+		CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,
+		CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION
 
-SELECT
-OBJECT_NAME(fk.[parent_object_id]) AS PARENT,
-CASE WHEN fkOpt.is_not_trusted = 1 THEN 'WITH NOCHECK' ELSE 'WITH CHECK' END AS NOT_TRUSTED_CHECK,
-OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,
-sCol.name,
-OBJECT_NAME(fk.[referenced_object_id]) AS REFER,
+		FROM [%1].[sys].[foreign_key_columns] AS fk
 
-(SELECT name
-FROM [EnergyRes].[sys].[columns]
-WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,
+		JOIN [%1].[sys].[columns] AS sCol
+		ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]
 
-CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,
-CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,
-CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION
+		JOIN [%1].[sys].[foreign_keys] AS fkOpt
+		ON fkOpt.name = OBJECT_NAME(fk.[constraint_object_id])
 
-FROM [EnergyRes].[sys].[foreign_key_columns] AS fk
+		ORDER BY PARENT)").arg(mainDbName);
 
-JOIN [EnergyRes].[sys].[columns] AS sCol
-ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]
+	if (!checkAndCreateFKQuery.exec(queryString) || checkAndCreateFKQuery.next())
+	{
 
-JOIN [EnergyRes].[sys].[foreign_keys] AS fkOpt
-ON fkOpt.name = OBJECT_NAME(fk.[constraint_object_id])
+		std::cout << "Error in createFK when try to get all FK " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
+		qDebug() << checkAndCreateFKQuery.lastQuery();
 
-ORDER BY PARENT
+	}
+	else
+	{
+		// записываем FK в новую DB
 
+		do {
+			QString queryString = QString(R"(
+			ALTER TABLE [%1].dbo.[%2] %3
+				ADD CONSTRAINT %4
+				FOREIGN KEY(%5)
+				REFERENCES [%1].dbo.[%6](%7)
+				%8 ON DELETE %9
+				ON UPDATE %10
+)")
+.arg(doppelDbName) // %1 name DB
+.arg(checkAndCreateFKQuery.value(0).toString()) // %2 PARENT TABLE
+.arg(checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA
+.arg(checkAndCreateFKQuery.value(2).toString()) // %4 KEY NAME
+.arg(checkAndCreateFKQuery.value(3).toString()) // %5 PARENT COLUMN
+.arg(checkAndCreateFKQuery.value(4).toString()) // %6 REFERENCES TABLE
+.arg(checkAndCreateFKQuery.value(5).toString()) // %7 REFERENCES COLUMN
+.arg(checkAndCreateFKQuery.value(6).toString()) // %8 REPLICATION
+.arg(checkAndCreateFKQuery.value(7).toString()) // %8 HOW DELETE
+.arg(checkAndCreateFKQuery.value(8).toString()); // %8 HOW UPDATE
 
-	ALTER TABLE EnergyRes_doppelganger.dbo.AL_POROG WITH CHECK
-		ADD CONSTRAINT FK_AlPorog_AlFormula
-		FOREIGN KEY(IDFORMULA)
-		REFERENCES EnergyRes_doppelganger.dbo.AL_FORMULA(IDFORMULA)
-		ON DELETE CASCADE
-		ON UPDATE NO ACTION
+			if (!writeFkQuery.exec(queryString))
+			{
+				std::cout << "Error in createFK when try add new FK in new DB " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << checkAndCreateFKQuery.lastQuery();
+			}
+
+		} while (checkAndCreateFKQuery.next());
+	}
+}
