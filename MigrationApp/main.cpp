@@ -146,6 +146,7 @@ int main(int argc, char* argv[])
 						if (connectDataBase(doppelDb, 0, 1))
 						{
 							createView(mainDbName);
+							createFK();
 						}
 						else
 							qDebug() << "Check your setting for connect to doppelDb DataBase and try again";
@@ -438,7 +439,7 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
-	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
+	//addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 
 	structArrayForTable.clear();
 	checkSpecialTypeArray.clear();
@@ -640,16 +641,17 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg(structArrayForTable[0].ColumnName);
 		}
 
-
 		// Создаём новую таблицу в новой БД через системные таблицы
+
+		QString tempForFirstColumn = '[' + structArrayForTable[0].ColumnName + ']';
 
 		queryString = QString("CREATE TABLE %1.dbo.%2 (%3 %4 %5)")
 			.arg('[' + baseName + ']')
 			.arg('[' + tableNameTemp + ']')
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
-			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[0].ColumnName == nameColumnForPK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
-
+			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((tempForFirstColumn == nameColumnForPK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
+			
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -687,7 +689,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 		if (manyComponentPK != "")
 		{
-			if (structArrayForTable[0].ColumnName == nameColumnForPK)
+			if (tempForFirstColumn == nameColumnForPK)
 			{
 				queryString = QString("ALTER TABLE %1.dbo.%2 DROP CONSTRAINT %3")
 					.arg('[' + baseName + ']')
@@ -1609,33 +1611,33 @@ void createFK()
 	QSqlQuery checkAndCreateFKQuery(mainDb);
 	QSqlQuery writeFkQuery(masterDb);
 
-	QString queryString = QString(R"(
-		SELECT
-		OBJECT_NAME(fk.[parent_object_id]) AS PARENT,
-		CASE WHEN fkOpt.is_not_trusted = 1 THEN 'WITH NOCHECK' ELSE 'WITH CHECK' END AS NOT_TRUSTED_CHECK,
-		OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,
-		sCol.name,
-		OBJECT_NAME(fk.[referenced_object_id]) AS REFER,
+	QString queryString = QString(
+		"SELECT"
+		" OBJECT_NAME(fk.[parent_object_id]) AS PARENT,"
+		" CASE WHEN fkOpt.is_not_trusted = 1 THEN 'WITH NOCHECK' ELSE 'WITH CHECK' END AS NOT_TRUSTED_CHECK,"
+		" OBJECT_NAME(fk.[constraint_object_id]) AS CONSTR,"
+		" sCol.name,"
+		" OBJECT_NAME(fk.[referenced_object_id]) AS REFER,"
 
-		(SELECT name
-			FROM [%1].[sys].[columns]
-			WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,
+		" (SELECT name"
+		" FROM [%1].[sys].[columns]"
+		" WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,"
 
-		CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,
-		CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,
-		CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION
+		" CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,"
+		" CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,"
+		" CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION"
 
-		FROM [%1].[sys].[foreign_key_columns] AS fk
+		" FROM [%1].[sys].[foreign_key_columns] AS fk"
 
-		JOIN [%1].[sys].[columns] AS sCol
-		ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]
+		" JOIN [%1].[sys].[columns] AS sCol"
+		" ON fk.[parent_object_id] = sCol.object_id AND sCol.column_id = fk.[parent_column_id]"
 
-		JOIN [%1].[sys].[foreign_keys] AS fkOpt
-		ON fkOpt.name = OBJECT_NAME(fk.[constraint_object_id])
+		" JOIN [%1].[sys].[foreign_keys] AS fkOpt"
+		" ON fkOpt.name = OBJECT_NAME(fk.[constraint_object_id])"
 
-		ORDER BY PARENT)").arg(mainDbName);
+		" ORDER BY PARENT").arg(mainDbName);
 
-	if (!checkAndCreateFKQuery.exec(queryString) || checkAndCreateFKQuery.next())
+	if (!checkAndCreateFKQuery.exec(queryString) || !checkAndCreateFKQuery.next())
 	{
 
 		std::cout << "Error in createFK when try to get all FK " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
@@ -1647,14 +1649,14 @@ void createFK()
 		// записываем FK в новую DB
 
 		do {
-			QString queryString = QString(R"(
-			ALTER TABLE [%1].dbo.[%2] %3
-				ADD CONSTRAINT %4
-				FOREIGN KEY(%5)
-				REFERENCES [%1].dbo.[%6](%7)
-				%8 ON DELETE %9
-				ON UPDATE %10
-)")
+			QString writeString = QString(
+			"ALTER TABLE [%1].dbo.[%2] %3"
+				" ADD CONSTRAINT %4"
+				" FOREIGN KEY(%5)"
+				" REFERENCES [%1].dbo.[%6] (%7)"
+				"%8 ON DELETE %9"
+				" ON UPDATE %10"
+			)
 .arg(doppelDbName) // %1 name DB
 .arg(checkAndCreateFKQuery.value(0).toString()) // %2 PARENT TABLE
 .arg(checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA
@@ -1666,12 +1668,12 @@ void createFK()
 .arg(checkAndCreateFKQuery.value(7).toString()) // %8 HOW DELETE
 .arg(checkAndCreateFKQuery.value(8).toString()); // %8 HOW UPDATE
 
-			if (!writeFkQuery.exec(queryString))
+			if (!writeFkQuery.exec(writeString))
 			{
-				std::cout << "Error in createFK when try add new FK in new DB " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << checkAndCreateFKQuery.lastQuery();
+				std::cout << "Error in createFK when try add new FK in new DB " + writeFkQuery.lastError().text().toStdString() << std::endl;
+				qDebug() << writeFkQuery.lastQuery();
 			}
-
+			qDebug() << "ADD FK " << checkAndCreateFKQuery.value(2).toString(); //////////////////////////////////
 		} while (checkAndCreateFKQuery.next());
 	}
 }
