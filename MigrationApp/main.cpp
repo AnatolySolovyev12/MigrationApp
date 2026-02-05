@@ -81,6 +81,7 @@ void writeCurrent();
 void createFullBdFromCopy(QString tableNameTemp);
 void checkDuplicateTableInNewBd(QString baseName, QString tableNameTemp);
 void createFK();
+void createIndexInNewTable(QString tempTable);
 
 QList<QString>stringTablesArray;
 
@@ -651,7 +652,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			.arg('[' + structArrayForTable[0].ColumnName + ']')
 			.arg(validateTypeOfColumn(structArrayForTable[0].dataType, QString::number(structArrayForTable[0].characterMaximumLength)))
 			.arg(tempPrimaryKey == "" ? (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL") : ((tempForFirstColumn == nameColumnForPK || structArrayForTable[0].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[0].isNullable == "YES" ? "" : "NOT NULL")));
-			
+
 		if (!createTableAndColumnInNewDb.exec(queryString) || !createTableAndColumnInNewDb.next())
 		{
 			if (createTableAndColumnInNewDb.lastError().isValid())
@@ -1650,23 +1651,23 @@ void createFK()
 
 		do {
 			QString writeString = QString(
-			"ALTER TABLE [%1].dbo.[%2] %3"
+				"ALTER TABLE [%1].dbo.[%2] %3"
 				" ADD CONSTRAINT %4"
 				" FOREIGN KEY(%5)"
 				" REFERENCES [%1].dbo.[%6] (%7)"
 				"%8 ON DELETE %9"
 				" ON UPDATE %10"
 			)
-.arg(doppelDbName) // %1 name DB
-.arg(checkAndCreateFKQuery.value(0).toString()) // %2 PARENT TABLE
-.arg(checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA
-.arg(checkAndCreateFKQuery.value(2).toString()) // %4 KEY NAME
-.arg(checkAndCreateFKQuery.value(3).toString()) // %5 PARENT COLUMN
-.arg(checkAndCreateFKQuery.value(4).toString()) // %6 REFERENCES TABLE
-.arg(checkAndCreateFKQuery.value(5).toString()) // %7 REFERENCES COLUMN
-.arg(checkAndCreateFKQuery.value(6).toString()) // %8 REPLICATION
-.arg(checkAndCreateFKQuery.value(7).toString()) // %8 HOW DELETE
-.arg(checkAndCreateFKQuery.value(8).toString()); // %8 HOW UPDATE
+				.arg(doppelDbName) // %1 name DB
+				.arg(checkAndCreateFKQuery.value(0).toString()) // %2 PARENT TABLE
+				.arg(checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA
+				.arg(checkAndCreateFKQuery.value(2).toString()) // %4 KEY NAME
+				.arg(checkAndCreateFKQuery.value(3).toString()) // %5 PARENT COLUMN
+				.arg(checkAndCreateFKQuery.value(4).toString()) // %6 REFERENCES TABLE
+				.arg(checkAndCreateFKQuery.value(5).toString()) // %7 REFERENCES COLUMN
+				.arg(checkAndCreateFKQuery.value(6).toString()) // %8 REPLICATION
+				.arg(checkAndCreateFKQuery.value(7).toString()) // %8 HOW DELETE
+				.arg(checkAndCreateFKQuery.value(8).toString()); // %8 HOW UPDATE
 
 			if (!writeFkQuery.exec(writeString))
 			{
@@ -1676,4 +1677,27 @@ void createFK()
 			qDebug() << "ADD FK " << checkAndCreateFKQuery.value(2).toString(); //////////////////////////////////
 		} while (checkAndCreateFKQuery.next());
 	}
+}
+
+
+
+void createIndexInNewTable(QString tempTable)
+{
+	QSqlQuery getIndex(mainDb);
+
+	QString queryString = QString("SELECT * FROM[%1].[sys].[indexes] WHERE OBJECT_NAME([object_id]) = '%2'")
+		.arg(mainDbName)
+		.arg(tempTable);
+
+	if (!getIndex.exec(queryString) || !getIndex.next())
+	{
+
+		std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getIndex.lastError().text().toStdString() << std::endl;
+		qDebug() << getIndex.lastQuery();
+
+	}
+	else
+	{
+
+
 }
