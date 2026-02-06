@@ -1794,7 +1794,7 @@ void createIndexInNewTable(QString tempTable)
 
 			// Формируем список INCLUDE компонентнов из которых состоят индексы
 
-			QString queryStringForComponent = QString(
+			 queryStringForComponent = QString(
 				"SELECT"
 				" inCol.[object_id],"
 				" OBJECT_NAME(inCol.[object_id]) AS OBJNAME,"
