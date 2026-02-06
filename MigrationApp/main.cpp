@@ -1683,21 +1683,102 @@ void createFK()
 
 void createIndexInNewTable(QString tempTable)
 {
-	QSqlQuery getIndex(mainDb);
+	QSqlQuery getAllIndex(mainDb);
+	QSqlQuery getIndexComponent(mainDb);
+	QString FullQueryForCreateIndex;
 
-	QString queryString = QString("SELECT * FROM[%1].[sys].[indexes] WHERE OBJECT_NAME([object_id]) = '%2'")
+	QString queryString = QString(
+		"SELECT"
+		" [object_id]"
+		", [name]"
+		", [index_id]"
+		", CASE WHEN[is_unique] = 1 THEN 'UNIQUE' ELSE '' END AS 'is_unique'"
+		", [type_desc]"
+		", [data_space_id]"
+		", [ignore_dup_key]"
+		", [is_primary_key]"
+		", [is_unique_constraint]"
+		", [fill_factor]"
+		", [is_padded]"
+		", [is_disabled]"
+		", [is_hypothetical]"
+		", [allow_row_locks]"
+		", [allow_page_locks]"
+		", [has_filter]"
+		", [filter_definition]"
+		", [compression_delay]"
+		" FROM [%1].[sys].[indexes]"
+		" WHERE OBJECT_NAME([object_id]) = '%2' AND is_primary_key != 1"
+	)
 		.arg(mainDbName)
 		.arg(tempTable);
 
-	if (!getIndex.exec(queryString) || !getIndex.next())
+	if (!getAllIndex.exec(queryString) || !getAllIndex.next())
 	{
-
-		std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getIndex.lastError().text().toStdString() << std::endl;
-		qDebug() << getIndex.lastQuery();
-
+		std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+		qDebug() << getAllIndex.lastQuery();
 	}
 	else
 	{
+		do
+		{
+			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + "ON " + doppelDbName + " (";
 
+			QString queryStringForComponent = QString(
+				"SELECT"
+				" inCol.[object_id],"
+				" OBJECT_NAME(inCol.[object_id]) AS OBJNAME,"
+				" inCol.[index_id],"
+				" inCol.[index_column_id],"
+				" inCol.[column_id],"
+				" col.[name] AS NameCol,"
+				" inCol.[key_ordinal],"
+				" inCol.[partition_ordinal],"
+				" CASE WHEN [is_descending_key] = 0 THEN 'ASC' ELSE 'DESC' END AS 'is_descending_key',"
+				" inCol.[is_included_column]"
+				" FROM[%1].[sys].[index_columns] AS inCol"
+				" JOIN[%1].[sys].[columns] AS col"
+				" ON inCol.[object_id] = col.[object_id]"
+				" AND inCol.[column_id] = col.[column_id]"
+				" WHERE inCol.[object_id] = '%2' AND index_id = '%3' AND is_included_column = '0'"
+				" ORDER BY index_column_id"
+			)
+				.arg(mainDbName)
+				.arg(getAllIndex.value(0).toString())
+				.arg(getAllIndex.value(2).toString());
+
+			if (!getIndexComponent.exec(queryStringForComponent) || !getIndexComponent.next())
+			{
+				if (getIndexComponent.lastError().isValid())
+				{
+					std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+					qDebug() << getAllIndex.lastQuery();
+				}
+				else
+					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent component or unknown ploblem";
+			}
+			else
+			{
+				do
+				{
+					FullQueryForCreateIndex += getIndexComponent.value(5).toString() + ' ' + getIndexComponent.value(8).toString() + ", ";
+
+				} while (getIndexComponent.next());
+
+				FullQueryForCreateIndex.chop(2);
+				FullQueryForCreateIndex += ')';
+			}
+
+		} while (getAllIndex.next());
+
+
+
+
+
+
+
+
+
+	}
 
 }
