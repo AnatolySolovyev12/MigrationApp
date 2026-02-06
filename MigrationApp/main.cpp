@@ -725,6 +725,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 
 		identityQueryFromMain.clear();
+
+		createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
 	}
 }
 
