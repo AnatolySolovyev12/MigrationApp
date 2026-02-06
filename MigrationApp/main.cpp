@@ -1640,10 +1640,11 @@ void createFK()
 
 	if (!checkAndCreateFKQuery.exec(queryString) || !checkAndCreateFKQuery.next())
 	{
-
-		std::cout << "Error in createFK when try to get all FK " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
-		qDebug() << checkAndCreateFKQuery.lastQuery();
-
+		if (checkAndCreateFKQuery.lastError().isValid())
+		{
+			std::cout << "Error in createFK when try to get all FK " + checkAndCreateFKQuery.lastError().text().toStdString() << std::endl;
+			qDebug() << checkAndCreateFKQuery.lastQuery();
+		}
 	}
 	else
 	{
@@ -1671,10 +1672,14 @@ void createFK()
 
 			if (!writeFkQuery.exec(writeString))
 			{
-				std::cout << "Error in createFK when try add new FK in new DB " + writeFkQuery.lastError().text().toStdString() << std::endl;
-				qDebug() << writeFkQuery.lastQuery();
+				if (writeFkQuery.lastError().isValid())
+				{
+					std::cout << "Error in createFK when try add new FK in new DB " + writeFkQuery.lastError().text().toStdString() << std::endl;
+					qDebug() << writeFkQuery.lastQuery();
+				}
 			}
 			qDebug() << "ADD FK " << checkAndCreateFKQuery.value(2).toString(); //////////////////////////////////
+
 		} while (checkAndCreateFKQuery.next());
 	}
 }
@@ -1683,9 +1688,15 @@ void createFK()
 
 void createIndexInNewTable(QString tempTable)
 {
+	// Проставляем индексы в таблицы
+
 	QSqlQuery getAllIndex(mainDb);
 	QSqlQuery getIndexComponent(mainDb);
+	QSqlQuery writeIndexInDoppelDb(masterDb);
+
 	QString FullQueryForCreateIndex;
+
+	// Получаем список всех индексов таблицы если таковые имеются
 
 	QString queryString = QString(
 		"SELECT"
@@ -1715,13 +1726,23 @@ void createIndexInNewTable(QString tempTable)
 
 	if (!getAllIndex.exec(queryString) || !getAllIndex.next())
 	{
-		std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
-		qDebug() << getAllIndex.lastQuery();
+		if (getAllIndex.lastError().isValid())
+		{
+			std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+			qDebug() << getAllIndex.lastQuery();
+		}
+		else
+		{
+			qDebug() << "Table " + tempTable + " havent index's or unknown ploblem";
+			return;
+		}
 	}
 	else
 	{
 		do
 		{
+			// Формируем список INDEX компонентнов из которых состоят индексы
+
 			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + "ON " + doppelDbName + " (";
 
 			QString queryStringForComponent = QString(
@@ -1751,11 +1772,11 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+					std::cout << "Error in createIndexInNewTable when try to get index component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 					qDebug() << getAllIndex.lastQuery();
 				}
 				else
-					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent component or unknown ploblem";
+					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent index component or unknown ploblem";
 			}
 			else
 			{
@@ -1769,16 +1790,72 @@ void createIndexInNewTable(QString tempTable)
 				FullQueryForCreateIndex += ')';
 			}
 
+			// Формируем список INCLUDE компонентнов из которых состоят индексы
+
+			QString queryStringForComponent = QString(
+				"SELECT"
+				" inCol.[object_id],"
+				" OBJECT_NAME(inCol.[object_id]) AS OBJNAME,"
+				" inCol.[index_id],"
+				" inCol.[index_column_id],"
+				" inCol.[column_id],"
+				" col.[name] AS NameCol,"
+				" inCol.[key_ordinal],"
+				" inCol.[partition_ordinal],"
+				" CASE WHEN [is_descending_key] = 0 THEN 'ASC' ELSE 'DESC' END AS 'is_descending_key',"
+				" inCol.[is_included_column]"
+				" FROM[%1].[sys].[index_columns] AS inCol"
+				" JOIN[%1].[sys].[columns] AS col"
+				" ON inCol.[object_id] = col.[object_id]"
+				" AND inCol.[column_id] = col.[column_id]"
+				" WHERE inCol.[object_id] = '%2' AND index_id = '%3' AND is_included_column = '1'"
+				" ORDER BY index_column_id"
+			)
+				.arg(mainDbName)
+				.arg(getAllIndex.value(0).toString())
+				.arg(getAllIndex.value(2).toString());
+
+			if (!getIndexComponent.exec(queryStringForComponent) || !getIndexComponent.next())
+			{
+				if (getIndexComponent.lastError().isValid())
+				{
+					std::cout << "Error in createIndexInNewTable when try to get include component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+					qDebug() << getAllIndex.lastQuery();
+				}
+				else
+					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent include component or unknown ploblem";
+			}
+			else
+			{
+				FullQueryForCreateIndex += "INCLUDE (";
+
+				do
+				{
+					FullQueryForCreateIndex += getIndexComponent.value(5).toString() + ' ' + getIndexComponent.value(8).toString() + ", ";
+
+				} while (getIndexComponent.next());
+
+				FullQueryForCreateIndex.chop(2);
+				FullQueryForCreateIndex += ')';
+			}
+
+			// Производим запись компонента из сформированной строки запроса
+
+			if (!writeIndexInDoppelDb.exec(FullQueryForCreateIndex))
+			{
+				if (getIndexComponent.lastError().isValid())
+				{
+					std::cout << "Error in createIndexInNewTable when try to write new index in doppelDb " + writeIndexInDoppelDb.lastError().text().toStdString() << std::endl;
+					qDebug() << writeIndexInDoppelDb.lastQuery();
+				}
+				else
+					qDebug() << "Unknown ploblem when try to write new index in doppelDb";
+			}
+			else
+			{
+				qDebug() << "Index " + getAllIndex.value(1).toString() + " was added";
+			}
+
 		} while (getAllIndex.next());
-
-
-
-
-
-
-
-
-
 	}
-
 }
