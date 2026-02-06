@@ -427,6 +427,8 @@ SELECT *
 		} while (createTableAndColumn.next());
 
 		createTablesInDoppelDb(baseName, tableNameTemp);
+
+		createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
 	}
 
 	// высчитываем процент выполнения создания новых таблиц в новой БД
@@ -725,8 +727,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 
 		identityQueryFromMain.clear();
-
-		createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
 	}
 }
 
@@ -1730,12 +1730,12 @@ void createIndexInNewTable(QString tempTable)
 	{
 		if (getAllIndex.lastError().isValid())
 		{
-			std::cout << "Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+			std::cout << " Error in createIndexInNewTable when try to get all index for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 			qDebug() << getAllIndex.lastQuery();
 		}
 		else
 		{
-			qDebug() << "Table " + tempTable + " havent index's or unknown ploblem";
+			qDebug() << " Table " + tempTable + " havent index's or unknown ploblem";
 			return;
 		}
 	}
@@ -1745,7 +1745,7 @@ void createIndexInNewTable(QString tempTable)
 		{
 			// Формируем список INDEX компонентнов из которых состоят индексы
 
-			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + "ON " + doppelDbName + " (";
+			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + " ON " + tempTable + " (";
 
 			QString queryStringForComponent = QString(
 				"SELECT"
@@ -1774,11 +1774,11 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << "Error in createIndexInNewTable when try to get index component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+					std::cout << " Error in createIndexInNewTable when try to get index component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 					qDebug() << getAllIndex.lastQuery();
 				}
 				else
-					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent index component or unknown ploblem";
+					qDebug() << " Index " + getAllIndex.value(1).toString() + " havent index component or unknown ploblem";
 			}
 			else
 			{
@@ -1821,11 +1821,11 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << "Error in createIndexInNewTable when try to get include component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
+					std::cout << " Error in createIndexInNewTable when try to get include component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 					qDebug() << getAllIndex.lastQuery();
 				}
 				else
-					qDebug() << "Index " + getAllIndex.value(1).toString() + " havent include component or unknown ploblem";
+					qDebug() << " Index " + getAllIndex.value(1).toString() + " havent include component or unknown ploblem";
 			}
 			else
 			{
@@ -1847,15 +1847,16 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << "Error in createIndexInNewTable when try to write new index in doppelDb " + writeIndexInDoppelDb.lastError().text().toStdString() << std::endl;
+					std::cout << " Error in createIndexInNewTable when try to write new index in doppelDb " + writeIndexInDoppelDb.lastError().text().toStdString() << std::endl;
 					qDebug() << writeIndexInDoppelDb.lastQuery();
 				}
 				else
-					qDebug() << "Unknown ploblem when try to write new index in doppelDb";
+					qDebug() << " Unknown ploblem when try to write new index in doppelDb";
+				qDebug() << writeIndexInDoppelDb.lastQuery();
 			}
 			else
 			{
-				qDebug() << "Index " + getAllIndex.value(1).toString() + " was added";
+				qDebug() << " Index " + getAllIndex.value(1).toString() + " was added";
 			}
 
 		} while (getAllIndex.next());
