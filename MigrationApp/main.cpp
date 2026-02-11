@@ -427,8 +427,6 @@ SELECT *
 		} while (createTableAndColumn.next());
 
 		createTablesInDoppelDb(baseName, tableNameTemp);
-
-		createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
 	}
 
 	// высчитываем процент выполнения создания новых таблиц в новой БД
@@ -446,6 +444,8 @@ SELECT *
 
 	structArrayForTable.clear();
 	checkSpecialTypeArray.clear();
+
+	createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
 }
 
 
@@ -1745,7 +1745,7 @@ void createIndexInNewTable(QString tempTable)
 		{
 			// Формируем список INDEX компонентнов из которых состоят индексы
 
-			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + " ON " + tempTable + " (";
+			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + " ON " + '[' + doppelDbName + "].dbo." + tempTable + " (";
 
 			QString queryStringForComponent = QString(
 				"SELECT"
@@ -1858,6 +1858,8 @@ void createIndexInNewTable(QString tempTable)
 			{
 				qDebug() << " Index " + getAllIndex.value(1).toString() + " was added";
 			}
+
+			FullQueryForCreateIndex.clear();
 
 		} while (getAllIndex.next());
 	}
