@@ -1721,7 +1721,7 @@ void createIndexInNewTable(QString tempTable)
 		", [filter_definition]"
 		", [compression_delay]"
 		" FROM [%1].[sys].[indexes]"
-		" WHERE OBJECT_NAME([object_id]) = '%2' AND is_primary_key != 1"
+		" WHERE OBJECT_NAME([object_id]) = '%2' AND is_primary_key != 1 AND index_id > 0 AND type > 0"
 	)
 		.arg(mainDbName)
 		.arg(tempTable);
@@ -1735,7 +1735,7 @@ void createIndexInNewTable(QString tempTable)
 		}
 		else
 		{
-			qDebug() << " Table " + tempTable + " havent index's or unknown ploblem";
+			std::cout << ". Table " + tempTable.toStdString() + " havent index's or unknown ploblem";
 			return;
 		}
 	}
