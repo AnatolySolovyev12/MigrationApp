@@ -531,7 +531,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		bool identity = false;
 		bool primary = false;
 		QString specialColuimnForCompareIdentity;
-		QString specialColuimnForComparePK;
+		QString namePK;
 		QString nameColumnForPK;
 		QString manyComponentPK;
 
@@ -541,6 +541,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		QString checkIncrementValue = QString("SELECT name, CAST(seed_value AS INT) AS seed_value, CAST(increment_value AS INT) AS increment_value FROM [%1].sys.identity_columns WHERE OBJECT_NAME(object_id) = '%2'")
 			.arg(mainDbName)
 			.arg(tableNameTemp);
+
 		if (!identityQueryFromMain.exec(checkIncrementValue) || !identityQueryFromMain.next())
 		{
 			if (identityQueryFromMain.lastError().isValid())
@@ -559,7 +560,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				identity = false;
 		}
-
+		if (tableNameTemp == "DicProperty") qDebug() << identityQueryFromMain.lastQuery(); ///////////////////////////////////////////////////////////////
 		// Получаем информацию на предмет наличия PRIMARY_KEY
 
 		tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
@@ -576,16 +577,18 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 		else
 		{
+			if (tableNameTemp == "DicProperty") qDebug() << getPkName.lastQuery(); ////////////////////////////////////////////////////
+
 			if (getPkName.isValid())
 			{
 				// Определяем является ли PK многосоставным и если является то формируем тело ключа
 
-				specialColuimnForComparePK = getPkName.value(0).toString();
+				namePK = getPkName.value(0).toString();
 
 				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
 					.arg(mainDbName)
 					.arg(tableNameTemp)
-					.arg(specialColuimnForComparePK);
+					.arg(namePK);
 
 				if (!getPkName.exec(tempFoGetPk) || !getPkName.last())
 				{
@@ -618,7 +621,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				primary = false;
 		}
-
+		if (tableNameTemp == "DicProperty") qDebug() << getPkName.lastQuery(); ////////////////////////////////////////////////////
 		// Определяем исход из полученных переменных характер первого столбца при создании таблицы
 
 		if (primary && identity)
@@ -626,7 +629,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
 				.arg(identityQueryFromMain.value(1).toString())
 				.arg(identityQueryFromMain.value(2).toString())
-				.arg(specialColuimnForComparePK)
+				.arg(namePK)
 				.arg(identityQueryFromMain.value(0).toString());
 		}
 
@@ -640,7 +643,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		if (primary && !identity)
 		{
 			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
-				.arg(specialColuimnForComparePK)
+				.arg(namePK)
 				.arg(structArrayForTable[0].ColumnName);
 		}
 
@@ -665,7 +668,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				return;
 			}
 		}
-
+		if (tableNameTemp == "DicProperty") qDebug() << createTableAndColumnInNewDb.lastQuery(); //////////////////////////////////////////
 		// Добавляем оставшиеся столбцы в созданную таблицу
 
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
@@ -675,7 +678,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + structArrayForTable[counterColumn].ColumnName + ']')
 				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
-				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[counterColumn].ColumnName == specialColuimnForComparePK || structArrayForTable[counterColumn].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
+				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[counterColumn].ColumnName == namePK || structArrayForTable[counterColumn].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
@@ -686,8 +689,9 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 					return;
 				}
 			}
-		}
+			if (tableNameTemp == "DicProperty") qDebug() << createTableAndColumnInNewDb.lastQuery() << "\ntempPrimaryKey = " << tempPrimaryKey << "   structArrayForTable[counterColumn].ColumnName = " << structArrayForTable[counterColumn].ColumnName << "   namePK = " << namePK;//////////////////////////////////////////
 
+		}
 		// Пересоздаём ключ если он был многокомпонентным предварительно его удалив, если он всё таки был создан
 
 		if (manyComponentPK != "")
@@ -697,7 +701,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				queryString = QString("ALTER TABLE %1.dbo.%2 DROP CONSTRAINT %3")
 					.arg('[' + baseName + ']')
 					.arg('[' + tableNameTemp + ']')
-					.arg('[' + specialColuimnForComparePK + ']');
+					.arg('[' + namePK + ']');
 
 				if (!createTableAndColumnInNewDb.exec(queryString))
 				{
@@ -713,7 +717,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			queryString = QString("ALTER TABLE %1.dbo.%2 ADD CONSTRAINT %3 PRIMARY KEY (%4)")
 				.arg('[' + baseName + ']')
 				.arg('[' + tableNameTemp + ']')
-				.arg('[' + specialColuimnForComparePK + ']')
+				.arg('[' + namePK + ']')
 				.arg(manyComponentPK);
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
@@ -1777,8 +1781,8 @@ void createIndexInNewTable(QString tempTable)
 					std::cout << " Error in createIndexInNewTable when try to get index component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 					qDebug() << getAllIndex.lastQuery();
 				}
-				else
-					qDebug() << " Index " + getAllIndex.value(1).toString() + " havent index component or unknown ploblem";
+				//else
+				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent index components or unknown ploblem";
 			}
 			else
 			{
@@ -1824,8 +1828,8 @@ void createIndexInNewTable(QString tempTable)
 					std::cout << " Error in createIndexInNewTable when try to get include component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
 					qDebug() << getAllIndex.lastQuery();
 				}
-				else
-					qDebug() << " Index " + getAllIndex.value(1).toString() + " havent include component or unknown ploblem";
+				//else
+				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent include components or unknown ploblem";
 			}
 			else
 			{
@@ -1851,12 +1855,14 @@ void createIndexInNewTable(QString tempTable)
 					qDebug() << writeIndexInDoppelDb.lastQuery();
 				}
 				else
-					qDebug() << " Unknown ploblem when try to write new index in doppelDb";
-				qDebug() << writeIndexInDoppelDb.lastQuery();
+				{
+					qDebug() << "Unknown ploblem when try to write new index in doppelDb";
+					qDebug() << writeIndexInDoppelDb.lastQuery();
+				}
 			}
 			else
 			{
-				qDebug() << " Index " + getAllIndex.value(1).toString() + " was added";
+				std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " was added" << std::endl;
 			}
 
 			FullQueryForCreateIndex.clear();
