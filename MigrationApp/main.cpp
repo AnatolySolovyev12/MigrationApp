@@ -99,6 +99,7 @@ bool checkDuplicateTableBool = false;
 bool createFromCopy = false;
 bool CopyWithData = false;
 bool paramForConnectionFromFile = false;
+bool checkDataInFkCreate;
 
 int testCounter;
 int sliderIndexForDefaultParams = 0;
@@ -440,12 +441,12 @@ SELECT *
 
 	std::cout << "\r\x1b[2K" << tempForStdOut << std::flush; // делаем возврат корретки в текущей строке и затираем всю строку.
 
-	//addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
+	addValueInNewDb(structArrayForTable, tableNameTemp, QString::fromStdString(tempForStdOut));
 
 	structArrayForTable.clear();
 	checkSpecialTypeArray.clear();
 
-	createIndexInNewTable(tableNameTemp); //////////////////////////test но вероятно тут и останется
+	createIndexInNewTable(tableNameTemp);
 }
 
 
@@ -534,6 +535,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		QString namePK;
 		QString nameColumnForPK;
 		QString manyComponentPK;
+		QString nameColumnForPKwithoutSigns;
 
 		// Получаем информацию на предмет наличия IDENTITY_COLUMN
 		// sql_variant требуется преобразовать в запросе в целевой тип данных т.к. иначе буду проблемы с получением значений
@@ -560,7 +562,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				identity = false;
 		}
-		if (tableNameTemp == "DicProperty") qDebug() << identityQueryFromMain.lastQuery(); ///////////////////////////////////////////////////////////////
+
 		// Получаем информацию на предмет наличия PRIMARY_KEY
 
 		tempFoGetPk = QString("SELECT [name] FROM [%1].[sys].[key_constraints] WHERE OBJECT_NAME([parent_object_id]) = '%2'")
@@ -577,8 +579,6 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 		else
 		{
-			if (tableNameTemp == "DicProperty") qDebug() << getPkName.lastQuery(); ////////////////////////////////////////////////////
-
 			if (getPkName.isValid())
 			{
 				// Определяем является ли PK многосоставным и если является то формируем тело ключа
@@ -601,7 +601,10 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				else
 				{
 					if (getPkName.at() == 0) // Первая запись занимает нулевую позицию
+					{
 						nameColumnForPK = '[' + getPkName.value(0).toString() + ']';
+						nameColumnForPKwithoutSigns = getPkName.value(0).toString();
+					}
 					else
 					{
 						getPkName.first();
@@ -621,7 +624,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				primary = false;
 		}
-		if (tableNameTemp == "DicProperty") qDebug() << getPkName.lastQuery(); ////////////////////////////////////////////////////
+
 		// Определяем исход из полученных переменных характер первого столбца при создании таблицы
 
 		if (primary && identity)
@@ -644,7 +647,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		{
 			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
 				.arg(namePK)
-				.arg(structArrayForTable[0].ColumnName);
+				.arg(nameColumnForPKwithoutSigns);
 		}
 
 		// Создаём новую таблицу в новой БД через системные таблицы
@@ -668,30 +671,33 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				return;
 			}
 		}
-		if (tableNameTemp == "DicProperty") qDebug() << createTableAndColumnInNewDb.lastQuery(); //////////////////////////////////////////
+
 		// Добавляем оставшиеся столбцы в созданную таблицу
 
 		for (int counterColumn = 1; counterColumn < structArrayForTable.length(); counterColumn++)
 		{
+			QString tempForNextColumns = '[' + structArrayForTable[counterColumn].ColumnName + ']';
+
 			queryString = QString("ALTER TABLE %1.dbo.%2 ADD %3 %4 %5")
 				.arg('[' + baseName + ']')
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + structArrayForTable[counterColumn].ColumnName + ']')
 				.arg(validateTypeOfColumn(structArrayForTable[counterColumn].dataType, QString::number(structArrayForTable[counterColumn].characterMaximumLength)))
-				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : ((structArrayForTable[counterColumn].ColumnName == namePK || structArrayForTable[counterColumn].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
+				.arg(tempPrimaryKey == "" ? (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL") : ((tempForNextColumns == nameColumnForPK || structArrayForTable[counterColumn].ColumnName == specialColuimnForCompareIdentity) ? tempPrimaryKey : (structArrayForTable[counterColumn].isNullable == "YES" ? "" : "NOT NULL")));
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
 				if (createTableAndColumnInNewDb.lastError().isValid())
 				{
-					std::cout << "\nError in createTablesInDoppelDb when try add new column: " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
+					std::cout << "\nError in createTablesInDoppelDb when try add new column " << structArrayForTable[counterColumn].ColumnName.toStdString() << "   " << createTableAndColumnInNewDb.lastError().text().toStdString() << "\n" << createTableAndColumnInNewDb.lastQuery().toStdString() << std::endl;
 					structArrayForTable.clear();
+
 					return;
 				}
 			}
-			if (tableNameTemp == "DicProperty") qDebug() << createTableAndColumnInNewDb.lastQuery() << "\ntempPrimaryKey = " << tempPrimaryKey << "   structArrayForTable[counterColumn].ColumnName = " << structArrayForTable[counterColumn].ColumnName << "   namePK = " << namePK;//////////////////////////////////////////
 
 		}
+
 		// Пересоздаём ключ если он был многокомпонентным предварительно его удалив, если он всё таки был создан
 
 		if (manyComponentPK != "")
@@ -728,6 +734,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 					qDebug() << createTableAndColumnInNewDb.lastQuery() << "\n";
 				}
 			}
+
+			if (tableNameTemp == "DicAccessRight") qDebug() << createTableAndColumnInNewDb.lastQuery(); //////////////////////////////////////////
 		}
 
 		identityQueryFromMain.clear();
@@ -1222,6 +1230,7 @@ QString validateTypeOfColumn(QString any, QString maxLength)
 
 void addValueInNewDb(QList<TableColumnStruct> any, QString table, QString progress)
 {
+	checkDataInFkCreate = true;
 	QSqlQuery selectQuery(mainDb);
 	QSqlQuery insertQuery(masterDb);
 	QSqlQuery identitySelectQuery(mainDb);
@@ -1630,7 +1639,7 @@ void createFK()
 		" FROM [%1].[sys].[columns]"
 		" WHERE column_id = fk.[referenced_column_id] AND object_id = fk.[referenced_object_id]) AS NAME_REF,"
 
-		" CASE WHEN fkOpt.is_not_for_replication = 1 THEN 'NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,"
+		" CASE WHEN fkOpt.is_not_for_replication = 1 THEN ' NOT FOR REPLICATION' ELSE NULL END AS REPLICATION_CHECK,"
 		" CASE WHEN fkOpt.delete_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS DELETE_ACTION,"
 		" CASE WHEN fkOpt.update_referential_action = 1 THEN 'CASCADE' ELSE 'NO ACTION' END AS UPDATE_ACTION"
 
@@ -1662,12 +1671,12 @@ void createFK()
 				" ADD CONSTRAINT %4"
 				" FOREIGN KEY(%5)"
 				" REFERENCES [%1].dbo.[%6] (%7)"
-				"%8 ON DELETE %9"
-				" ON UPDATE %10"
+				" ON DELETE %9"
+				" ON UPDATE %10 %8"
 			)
 				.arg(doppelDbName) // %1 name DB
 				.arg(checkAndCreateFKQuery.value(0).toString()) // %2 PARENT TABLE
-				.arg(checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA
+				.arg(checkDataInFkCreate == true ? "WITH NOCHECK" : checkAndCreateFKQuery.value(1).toString()) // %3 CHECK DATA если не заносим данные перед этим иличе не проверяем
 				.arg(checkAndCreateFKQuery.value(2).toString()) // %4 KEY NAME
 				.arg(checkAndCreateFKQuery.value(3).toString()) // %5 PARENT COLUMN
 				.arg(checkAndCreateFKQuery.value(4).toString()) // %6 REFERENCES TABLE
@@ -1684,7 +1693,6 @@ void createFK()
 					qDebug() << writeFkQuery.lastQuery();
 				}
 			}
-			qDebug() << "ADD FK " << checkAndCreateFKQuery.value(2).toString(); //////////////////////////////////
 
 		} while (checkAndCreateFKQuery.next());
 	}
@@ -1862,7 +1870,7 @@ void createIndexInNewTable(QString tempTable)
 			}
 			else
 			{
-				std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " was added" << std::endl;
+				//std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " was added" << std::endl;
 			}
 
 			FullQueryForCreateIndex.clear();
