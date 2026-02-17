@@ -585,7 +585,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 				namePK = getPkName.value(0).toString();
 
-				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME] FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
+				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME], ind.type_desc FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] JOIN [ProSoft_ASKUE-Utek].[sys].[indexes] as ind ON OBJECT_NAME(ind.[object_id]) = TABLE_NAME AND [CONSTRAINT_NAME] = name WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
 					.arg(mainDbName)
 					.arg(tableNameTemp)
 					.arg(namePK);
@@ -629,11 +629,12 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 		if (primary && identity)
 		{
-			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY ([%4])")
+			tempPrimaryKey = QString("IDENTITY(%1,%2) NOT NULL, CONSTRAINT [%3] PRIMARY KEY %5 ([%4])")
 				.arg(identityQueryFromMain.value(1).toString())
 				.arg(identityQueryFromMain.value(2).toString())
 				.arg(namePK)
-				.arg(identityQueryFromMain.value(0).toString());
+				.arg(identityQueryFromMain.value(0).toString())
+				.arg(getPkName.value(2).toString());
 		}
 
 		if (!primary && identity)
@@ -645,9 +646,10 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 		if (primary && !identity)
 		{
-			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY ([%2])")
+			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY %3 ([%2])")
 				.arg(namePK)
-				.arg(nameColumnForPKwithoutSigns);
+				.arg(nameColumnForPKwithoutSigns)
+				.arg(getPkName.value(2).toString());
 		}
 
 		// Создаём новую таблицу в новой БД через системные таблицы
@@ -720,11 +722,12 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				}
 			}
 
-			queryString = QString("ALTER TABLE %1.dbo.%2 ADD CONSTRAINT %3 PRIMARY KEY (%4)")
+			queryString = QString("ALTER TABLE %1.dbo.%2 ADD CONSTRAINT %3 PRIMARY KEY %5 (%4)")
 				.arg('[' + baseName + ']')
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + namePK + ']')
-				.arg(manyComponentPK);
+				.arg(manyComponentPK)
+				.arg(getPkName.value(2).toString());
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
@@ -1757,7 +1760,7 @@ void createIndexInNewTable(QString tempTable)
 		{
 			// Формируем список INDEX компонентнов из которых состоят индексы
 
-			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX " + getAllIndex.value(1).toString() + " ON " + '[' + doppelDbName + "].dbo." + tempTable + " (";
+			FullQueryForCreateIndex += "CREATE " + getAllIndex.value(3).toString() + " " + getAllIndex.value(4).toString() + " INDEX [" + getAllIndex.value(1).toString() + "] ON " + '[' + doppelDbName + "].dbo." + tempTable + " (";
 
 			QString queryStringForComponent = QString(
 				"SELECT"
