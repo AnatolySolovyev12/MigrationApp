@@ -585,7 +585,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 
 				namePK = getPkName.value(0).toString();
 
-				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME], ind.type_desc FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] JOIN [ProSoft_ASKUE-Utek].[sys].[indexes] as ind ON OBJECT_NAME(ind.[object_id]) = TABLE_NAME AND [CONSTRAINT_NAME] = name WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
+				tempFoGetPk = QString("SELECT [COLUMN_NAME], [CONSTRAINT_NAME], ind.type_desc FROM [%1].[INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] JOIN [%1].[sys].[indexes] as ind ON OBJECT_NAME(ind.[object_id]) = TABLE_NAME AND [CONSTRAINT_NAME] = name WHERE [TABLE_NAME] = '%2' AND CONSTRAINT_NAME = '%3'")
 					.arg(mainDbName)
 					.arg(tableNameTemp)
 					.arg(namePK);
@@ -1789,11 +1789,14 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << " Error in createIndexInNewTable when try to get index component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
-					qDebug() << getAllIndex.lastQuery();
+					std::cout << " Error in createIndexInNewTable when try to get index component for temp table " + getIndexComponent.lastError().text().toStdString() << std::endl;
+					qDebug() << getIndexComponent.lastQuery();
 				}
-				//else
-				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent index components or unknown ploblem";
+				else
+				{
+					std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent index components or unknown ploblem";
+					//return; //////////////////////////////////////// надо посмотреть и потом раскоментить
+				}
 			}
 			else
 			{
@@ -1806,6 +1809,8 @@ void createIndexInNewTable(QString tempTable)
 				FullQueryForCreateIndex.chop(2);
 				FullQueryForCreateIndex += ')';
 			}
+
+			getIndexComponent.clear();
 
 			// ‘ормируем список INCLUDE компонентнов из которых состо€т индексы
 
@@ -1836,11 +1841,14 @@ void createIndexInNewTable(QString tempTable)
 			{
 				if (getIndexComponent.lastError().isValid())
 				{
-					std::cout << " Error in createIndexInNewTable when try to get include component for temp table " + getAllIndex.lastError().text().toStdString() << std::endl;
-					qDebug() << getAllIndex.lastQuery();
+					std::cout << " Error in createIndexInNewTable when try to get include component for temp table " + getIndexComponent.lastError().text().toStdString() << std::endl;
+					qDebug() << getIndexComponent.lastQuery();
 				}
-				//else
-				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent include components or unknown ploblem";
+				else
+				{
+					std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent include components or unknown ploblem";
+					//return;
+				}
 			}
 			else
 			{
@@ -1860,7 +1868,7 @@ void createIndexInNewTable(QString tempTable)
 
 			if (!writeIndexInDoppelDb.exec(FullQueryForCreateIndex))
 			{
-				if (getIndexComponent.lastError().isValid())
+				if (writeIndexInDoppelDb.lastError().isValid())
 				{
 					std::cout << " Error in createIndexInNewTable when try to write new index in doppelDb " + writeIndexInDoppelDb.lastError().text().toStdString() << std::endl;
 					qDebug() << writeIndexInDoppelDb.lastQuery();
