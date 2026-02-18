@@ -624,6 +624,8 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 			else
 				primary = false;
 		}
+		
+		getPkName.first(); // для дальнейшего определения кластеризованный ли ключ
 
 		// Определяем исход из полученных переменных характер первого столбца при создании таблицы
 
@@ -645,11 +647,11 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 		}
 
 		if (primary && !identity)
-		{
+		{ 
 			tempPrimaryKey = QString("NOT NULL, CONSTRAINT [%1] PRIMARY KEY %3 ([%2])")
 				.arg(namePK)
 				.arg(nameColumnForPKwithoutSigns)
-				.arg(getPkName.value(2).toString());
+				.arg(!getPkName.value(2).isNull() ? getPkName.value(2).toString() : "");
 		}
 
 		// Создаём новую таблицу в новой БД через системные таблицы
@@ -727,7 +729,7 @@ void createTablesInDoppelDb(QString baseName, QString tableNameTemp)
 				.arg('[' + tableNameTemp + ']')
 				.arg('[' + namePK + ']')
 				.arg(manyComponentPK)
-				.arg(getPkName.value(2).toString());
+				.arg(!getPkName.value(2).isNull() ? getPkName.value(2).toString() : "");
 
 			if (!createTableAndColumnInNewDb.exec(queryString))
 			{
@@ -1750,7 +1752,7 @@ void createIndexInNewTable(QString tempTable)
 		}
 		else
 		{
-			std::cout << ". Table " + tempTable.toStdString() + " havent index's or unknown ploblem";
+			//std::cout << ". Table " + tempTable.toStdString() + " havent index's or unknown ploblem";
 			return;
 		}
 	}
@@ -1792,11 +1794,11 @@ void createIndexInNewTable(QString tempTable)
 					std::cout << " Error in createIndexInNewTable when try to get index component for temp table " + getIndexComponent.lastError().text().toStdString() << std::endl;
 					qDebug() << getIndexComponent.lastQuery();
 				}
-				else
-				{
-					std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent index components or unknown ploblem";
+				//else
+				//{
+				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent index components or unknown ploblem";
 					//return; //////////////////////////////////////// надо посмотреть и потом раскоментить
-				}
+				//}
 			}
 			else
 			{
@@ -1844,11 +1846,11 @@ void createIndexInNewTable(QString tempTable)
 					std::cout << " Error in createIndexInNewTable when try to get include component for temp table " + getIndexComponent.lastError().text().toStdString() << std::endl;
 					qDebug() << getIndexComponent.lastQuery();
 				}
-				else
-				{
-					std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent include components or unknown ploblem";
+				//else
+				//{
+				//	std::cout << "\nIndex " + getAllIndex.value(1).toString().toStdString() + " havent include components or unknown ploblem";
 					//return;
-				}
+				//}
 			}
 			else
 			{
